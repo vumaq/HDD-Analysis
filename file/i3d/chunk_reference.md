@@ -156,10 +156,9 @@ Defines an **extra UV channel** beyond the base set.\
 Unlike standard 3DS, I3D supports multi-channel mapping for more
 complex texture setups.\
 The chunk typically includes:
-
-- A channel identifier\
-- UV coordinates for that channel\
-- Per-face references into the UV set\
+    - A channel identifier\
+    - UV coordinates for that channel\
+    - Per-face references into the UV set\
 This allows multiple textures to map differently onto the same
 geometry, a feature absent from legacy 3DS files.\
 Importers that don't handle this chunk will usually fail to
