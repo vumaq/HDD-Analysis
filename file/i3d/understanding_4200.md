@@ -1,4 +1,4 @@
-# Understanding the I3D 0x4200 `FACE_MAP_CHANNEL` Chunk
+# Understanding the I3D 0x4200 Chunk
 
 ## Purpose of the 0x4200 FACE_MAP_CHANNEL Chunk
 
@@ -44,7 +44,6 @@ One challenge for modders is that most tools (including Blender’s importers) d
 ### Workarounds and Tools:
 
 - **Use the original 3ds Max I3D plugin**: If you have access to 3ds Max and that plugin, you can import the .i3d file there.
-- **Use the Blender I3D add-on (if updated)**: Keep an eye on the community-driven Blender I3D add-on.
 - **Custom Parsing/Conversion**: Manually parse the 0x4200 chunk with a script or tool.
 
 ### Conclusion
