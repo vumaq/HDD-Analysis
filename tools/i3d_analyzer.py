@@ -10,7 +10,6 @@ Usage:
 import os
 import sys
 import struct
-import csv
 import json
 from collections import defaultdict
 from pathlib import Path
@@ -885,29 +884,6 @@ def write_chunk_tree(outdir, chunks):
         lines.append(f"{'  '*ch['depth']}- `0x{ch['id']:04X}` **{nm}** (off={ch['offset']}, size={ch['size']})")
     p.write_text("\n".join(lines), encoding="utf-8")
 
-def write_chunks_csv(outdir, chunks):
-    p = outdir / "chunks.csv"
-    with p.open("w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        w.writerow(["index","depth","parent","id_hex","id_dec","name","offset","size","payload_start","payload_end"])
-        for ch in chunks:
-            nm = REF.get(ch["id"], f"UNKNOWN_{ch['id']:04X}")
-            w.writerow([
-                ch["index"], ch["depth"], ch["parent"], f"0x{ch['id']:04X}",
-                ch["id"], nm, ch["offset"], ch["size"], ch["payload_start"], ch["payload_end"]
-            ])
-
-def write_cid_frequency(outdir, chunks):
-    p = outdir / "cid_frequency.csv"
-    freq = defaultdict(int)
-    for ch in chunks:
-        freq[ch["id"]] += 1
-    with p.open("w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        w.writerow(["id_hex","id_dec","name","count"])
-        for cid in sorted(freq.keys()):
-            w.writerow([f"0x{cid:04X}", cid, REF.get(cid, "UNKNOWN"), freq[cid]])
-
 def write_chunks_by_cid(outdir, chunks):
     p = outdir / "chunks_by_cid.md"
     groups = defaultdict(list)
@@ -951,14 +927,6 @@ def write_unused_known_ids(outdir, chunks):
             lines.append(f"| `0x{cid:04X}` | {cid} | {name} |")
     p.write_text("\n".join(lines), encoding="utf-8")
 
-def write_spec_reference(outdir):
-    p = outdir / "spec_reference.md"
-    lines = ["# Reference Table", "", "| ID (hex) | ID (dec) | Name | Strategy | Description |", "|----------|----------:|------|----------|-------------|"]
-    for cid in sorted(CID_REG.keys()):
-        meta = CID_REG[cid]
-        lines.append(f"| `0x{cid:04X}` | {cid} | {meta['name']} | {meta.get('strategy','auto')} | {meta.get('desc','')} |")
-    p.write_text("\n".join(lines), encoding="utf-8")
-
 def write_anomalies(outdir, anomalies):
     p = outdir / "anomalies.md"
     lines = ["# Anomalies", ""]
@@ -978,25 +946,6 @@ def write_json(outdir, chunks, anomalies):
         e["strategy"] = CID_REG.get(ch["id"], {}).get("strategy", "auto")
         enriched.append(e)
     p.write_text(json.dumps({"chunks": enriched, "anomalies": anomalies}, indent=2), encoding="utf-8")
-
-def write_viewport_csv(outdir):
-    if not VIEWPORT_LOG:
-        return
-    p = outdir / "viewport_blocks.csv"
-    with p.open("w", newline="", encoding="utf-8") as f:
-        w = csv.writer(f)
-        w.writerow([
-            "offset","id_hex","id_dec","name","view_type","view_name",
-            "length_bytes","zoom","pan_x","pan_y","rect_l","rect_t","rect_r","rect_b","ref_name"
-        ])
-        for row in VIEWPORT_LOG:
-            w.writerow([
-                row["offset"], row["id_hex"], row["id_dec"], row["name"],
-                row["view_type"], row["view_name"], row["bytes"],
-                row["zoom"], row["pan_x"], row["pan_y"],
-                row["rect_l"], row["rect_t"], row["rect_r"], row["rect_b"],
-                row["ref_name"]
-            ])
 
 # -----------------------------
 # Entry
@@ -1029,15 +978,11 @@ def main():
     unknown = sorted(seen - set(CID_REG.keys()))
     write_summary(outdir, chunks, unknown, anomalies)
     write_chunk_tree(outdir, chunks)
-    write_chunks_csv(outdir, chunks)
-    write_cid_frequency(outdir, chunks)
     write_chunks_by_cid(outdir, chunks)
     write_unknown_ids(outdir, chunks)
     write_unused_known_ids(outdir, chunks)
-    write_spec_reference(outdir)
     write_anomalies(outdir, anomalies)
     write_json(outdir, chunks, anomalies)
-    write_viewport_csv(outdir)
 
     print(f"OK: wrote reports to {outdir.resolve()}")
 
