@@ -15,7 +15,6 @@ It is designed to preserve meshes, UVs, and materials so assets can be opened in
 - **Axis transform correction** – applies `(x, -y, -z)` by default to convert I3D’s Z-up system to OBJ’s Y-up  
 - **Custom transforms** – optional `--transform "(exprX, exprY, exprZ)"` syntax for manual axis remapping  
 - **Bake option** – `--bake` collapses object transforms into vertex coordinates  
-- **Verbose logging** – always reports progress and applied transforms  
 
 ---
 

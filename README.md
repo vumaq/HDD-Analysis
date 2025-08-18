@@ -61,23 +61,6 @@ Textures should be placed alongside the `.i3d` file.
 
 ---
 
-## I3D-Specific Notes
-
-- **Extra UV maps (`0x4200 FACE_MAP_CHANNEL`)**: Unique to I3D, allows multiple UV channels per mesh.  
-- **Axis differences**: I3D uses Z-up, while OBJ uses Y-up. Default transform corrects this.  
-- **Animations**: Keyframe chunks (`0xB000`) are parsed by the analyzer but **not exported** by the OBJ converter.  
-
----
-
-## Limitations
-
-- Only tested against *Hidden & Dangerous* I3D files.  
-- Static models supported; animated I3D and map files are only partially covered.  
-- Additional UV channels beyond the first are not exported to OBJ.  
-- Materials assume `.png` texture files; missing textures result in untextured meshes.  
-
----
-
 ## License
 
 MIT License — free to use, modify, and share.
