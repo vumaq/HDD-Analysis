@@ -23,14 +23,15 @@ Unlike generic 3DS parsers, this analyzer focuses on the **Illusion Softworks I3
 ## Outputs
 For each `.i3d` file, the analyzer generates multiple reports:
 
-- **`summary.md`** – quick statistics (chunk counts, unknown IDs, anomalies).  
-- **`chunk_tree.md`** – indented outline of the chunk hierarchy.  
-- **`chunks_by_id.md`** – all occurrences grouped by chunk type.  
-- **`unknown_ids.md`** – IDs found in I3D but not yet mapped.  
-- **`unused_known_ids.md`** – known IDs not encountered in this file.  
-- **`anomalies.md`** – warnings about bad lengths or truncated payloads.  
-- **`report.json`** – structured tree with parsed values.  
-- **`viewports.md`** – captures viewport/display chunk info.
+- **`<file>.dump.txt`** - Human-readable text dump (structural + values)
+- **`report.json`** - Nested JSON
+- **`summary.md`** - High-level stats
+- **`chunk_tree.md`** - Flat tree of chunks with offsets/sizes
+- **`chunks_by_cid.md`** - Chunks grouped by ID
+- **`unknown_ids.md`** - Unknown chunk IDs encountered
+- **`unused_known_ids.md`** - Known IDs (registry) not used in this file
+- **`anomalies.md`** - Parse anomalies (invalid sizes, truncations)
+- **`viewports.md`** - Parsed viewport/display blocks (optional table)
 
 ---
 
