@@ -59,7 +59,8 @@ This makes the output easier to read, and cleaner for re-use in exporters.
 ### Extra UV Maps (`0x4200 FACE_MAP_CHANNEL`)
 - Specific to I3D.  
 - Allows **multiple UV channels per mesh**, unlike vanilla 3DS (which only supports one).  
-- This feature was introduced for Hidden & Dangerous to support multi-texturing (detail maps, lightmaps, etc.).  
+- This feature was introduced for Hidden & Dangerous to support multi-texturing (detail maps, lightmaps, etc.).
+[Understanding 4200](../file/i3d/understanding_4200.md)
 
 ---
 
@@ -77,4 +78,5 @@ This makes the output easier to read, and cleaner for re-use in exporters.
 - Test on **map files** for performance and scaling.  
 - Expand the registry with all known **Hidden & Dangerous chunk IDs**.  
 - Document quirks of the format (e.g. why some chunks overlap with standard 3DS, while others are I3D-only).
+
 
