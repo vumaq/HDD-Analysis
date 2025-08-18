@@ -1,4 +1,4 @@
-# Hidden & Dangerous I3D Tools
+# Hidden & Dangerous I3D File Format (analysis)
 
 ## Overview
 This repository contains tools and documentation for analyzing and working with the **I3D model format** used in *Hidden & Dangerous* and *Hidden & Dangerous Deluxe*.  
