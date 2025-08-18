@@ -1,77 +1,75 @@
-# Hidden & Dangerous I3D Analyzer Documentation
+# I3D / 3DS Analyzer
 
-[Download i3d_analyzier.py](tools/i3d_analyzer.py)
+📂 [Download Script](../tools/i3d_analyzer.py)
 
 ## Overview
-This tool is a **dedicated analyzer for Hidden & Dangerous `.i3d` model files**, which are derived from the classic **Autodesk 3D Studio `.3ds` format** but extended in several ways.  
-It inspects the binary chunk structure, extracts meaningful values, and produces both:
+The `i3d_analyzer.py` tool inspects **Hidden & Dangerous `.i3d` model files**, a variant of the **Autodesk 3D Studio `.3ds` format** with extensions specific to Illusion Softworks.  
+It parses the binary chunk structure, extracts meaningful values, and generates structured reports.  
 
-The I3D format is derived from the classic **Autodesk 3D Studio `.3ds` format**, but includes several extensions specific to Illusion Softworks, such as **extra UV map channels** [Understanding 4200](documentation/understanding_4200.md).    
-
-Unlike generic 3DS parsers, this analyzer focuses on the **Illusion Softworks I3D dialect**, as used in *Hidden & Dangerous* and *Hidden & Dangerous: Deluxe*.  
+Unlike generic 3DS parsers, this analyzer is tailored to the **I3D dialect** used in *Hidden & Dangerous* and *Hidden & Dangerous Deluxe*.
 
 ---
 
 ## Goals
-- Reverse-engineer the **I3D variant** of the 3DS format.  
-- Provide clear **visual reports** of the structure and values.  
+- Reverse-engineer the I3D format  
+- Provide clear, visual reports of structure and values  
+- Support modders and researchers working with legacy Illusion Softworks assets  
 
-⚠️ **Important**: So far this has only been tested on **static I3D models**, not animations or map files.
+⚠️ Tested primarily on static I3D models. Animation and map files are only partially covered.
 
 ---
 
 ## Outputs
-For each `.i3d` file, the analyzer generates multiple reports:
+For each `.i3d` file, the analyzer generates:
 
-- **`<file>.dump.txt`** - Human-readable text dump (structural + values)
-- **`report.json`** - Nested JSON
-- **`summary.md`** - High-level stats
-- **`chunk_tree.md`** - Flat tree of chunks with offsets/sizes
-- **`chunks_by_cid.md`** - Chunks grouped by ID
-- **`unknown_ids.md`** - Unknown chunk IDs encountered
-- **`unused_known_ids.md`** - Known IDs (registry) not used in this file
-- **`anomalies.md`** - Parse anomalies (invalid sizes, truncations)
-- **`viewports.md`** - Parsed viewport/display blocks (optional table)
-
----
-
-## JSON Structure
-The JSON output was designed for clarity and compactness:
-
-- Each chunk is represented with only what matters:
-  ```json
-  {
-    "id_hex": "0xA000",
-    "name": "MAT_NAME",
-    "lines": ["Material Name: $DOMEK OKNO"]
-  }
-  ```
-
-- `children` are only included if present.  
-- `lines` contain semantic values (like colors, UVs, face indices).  
-- Empty arrays are omitted entirely.  
-
-This makes the output easier to read, and cleaner for re-use in exporters.
+- **`<file>.dump.txt`** – human-readable text dump  
+- **`report.json`** – nested JSON representation  
+- **`summary.md`** – high-level stats  
+- **`chunk_tree.md`** – flat chunk tree (offsets/sizes)  
+- **`chunks_by_cid.md`** – chunks grouped by ID  
+- **`unknown_ids.md`** – unknown chunk IDs encountered  
+- **`unused_known_ids.md`** – known IDs not used in this file  
+- **`anomalies.md`** – anomalies like truncations or invalid sizes  
+- **`viewports.md`** – parsed viewport/display blocks (optional)  
 
 ---
 
-## Nuances of Hidden & Dangerous I3D
+## JSON Design
+The JSON report is designed to be minimal but reusable:
 
+```json
+{
+  "id_hex": "0xA000",
+  "name": "MAT_NAME",
+  "lines": ["Material Name: $DOMEK OKNO"]
+}
+```
+
+- `lines` contain semantic values (e.g. colors, UVs, face indices)  
+- `children` included only if present  
+- Empty arrays are omitted  
+
+This structure makes the output easy to read and suitable for converters.
+
+---
+
+## I3D-Specific Notes
 ### Extra UV Maps (`0x4200 FACE_MAP_CHANNEL`)
-- Specific to I3D.  
-- Allows **multiple UV channels per mesh**, unlike vanilla 3DS (which only supports one).  
-- This feature was introduced for Hidden & Dangerous to support multi-texturing (detail maps, lightmaps, etc.).
+- Unique to I3D  
+- Supports multiple UV channels per mesh (vanilla 3DS only supports one)  
+- Used in *Hidden & Dangerous* for multi-texturing, detail maps, and lightmaps  
 
 ---
 
-## Known Limitations
-- Only tested against **Hidden & Dangerous I3D model files**.  
-- **Map files** and **animated I3Ds** have not been validated.  
-- Registry of chunk IDs is still incomplete (unknown IDs appear in `unknown_ids.md`).  
-- Some float values are noisy (extra decimals).  
+## Limitations
+- Tested against *Hidden & Dangerous* I3D models only  
+- Animated I3D and map files not fully supported  
+- Chunk ID registry incomplete (see `unknown_ids.md`)  
+- Some float values may display extra decimals  
 
 ---
 
 ## Roadmap
 - ✅ Static model parsing  
-- 🔄 Animation and keyframe decoding  
+- ✅ Decoding of `0x4200 FACE_MAP_CHANNEL`  
+- ❌ Animation and keyframe decoding  
