@@ -2,8 +2,7 @@
 
 This repository provides utilities for working with **Illusion Softworks I3D model files** (as used in *Hidden & Dangerous* and *Hidden & Dangerous: Deluxe*).  
 
-The I3D format is derived from the **Autodesk 3D Studio `.3ds` format**, but extends it with additional chunk types  
-(e.g. `0x4200 FACE_MAP_CHANNEL` for multi-UV support). These scripts are designed for **modders, researchers, and developers** who want to inspect, extract, and convert I3D assets into modern formats.
+The I3D format is derived from the **Autodesk 3D Studio `.3ds` format**, but extends it with additional chunk types (e.g. `0x4200 FACE_MAP_CHANNEL` for multi-UV support).
 
 ---
 
