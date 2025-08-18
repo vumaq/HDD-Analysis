@@ -35,7 +35,7 @@ Our goal is to provide **modders and researchers** with reference tools that mak
 ⚠️ Currently only **static I3D models** have been tested.  
 Map files and animated models have not yet been validated.  
 
-The tool is still evolving — expect **unknown IDs** and **partial feature coverage**.
+The tool is still evolving, expect **unknown IDs** and **partial feature coverage**.
 
 ---
 
