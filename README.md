@@ -52,6 +52,7 @@ python i3d_to_obj.py domek.i3d --transform "(x, -z, y)"
 # Bake object transforms into vertices
 python i3d_to_obj.py domek.i3d --bake
 ```
+![Domek I3D Model](images/domek.i3d.png)
 
 ---
 
