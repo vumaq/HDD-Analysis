@@ -1,68 +1,59 @@
-# Hidden & Dangerous Modding Tools
+# Hidden & Dangerous I3D Tools
 
 ## Overview
-This repository provides a set of **reference tools for modders** working with *Hidden & Dangerous* and *Hidden & Dangerous: Deluxe*.  
-The goal is to **unpack, analyze, and document** the game’s data formats to make modding easier and more transparent.
+This repository contains tools and documentation for analyzing and working with the **I3D model format** used in *Hidden & Dangerous* and *Hidden & Dangerous Deluxe*.  
 
-Currently, the focus is on the **`.i3d` model format**, but the project will expand to cover other asset types such as **maps, textures, and animations**.
+The I3D format is derived from the classic **Autodesk 3D Studio `.3ds` format**, but includes several extensions specific to Illusion Softworks — such as **extra UV map channels** and **specialized material definitions**.  
+
+Our goal is to provide **modders and researchers** with reference tools that make it easier to explore, document, and eventually convert I3D assets for modern use.
 
 ---
 
 ## Features
-- **I3D Analyzer**
-  - Parses Hidden & Dangerous `.i3d` model files (derived from Autodesk 3DS).
-  - Produces **Markdown reports** for human-readable inspection.
-  - Exports **JSON trees** for automated conversion (e.g. `.obj/.mtl` workflows).
+- **I3D Analyzer**  
+  - Reads binary `.i3d` files.  
+  - Produces both **Markdown reports** and **JSON trees** for inspection.  
+  - Extracts materials, UVs, smoothing groups, and structural hierarchy.  
 
-- **Reports Generated**
-  - `summary.md` – quick statistics on chunks and anomalies.
-  - `chunk_tree.md` – indented outline of the file structure.
-  - `chunks_by_id.md` – grouped chunk occurrences.
-  - `unknown_ids.md` – unmapped IDs.
-  - `unused_known_ids.md` – unused but known IDs.
-  - `anomalies.md` – warnings for odd/truncated data.
-  - `dump.txt` – raw annotated chunk dump.
-  - `viewports.md` – viewport/display configuration.
-  - `report.json` – clean, hierarchical JSON representation.
+- **Outputs**  
+  - `summary.md` – quick statistics and metadata.  
+  - `chunk_tree.md` – indented hierarchy of all chunks.  
+  - `chunks_by_id.md` – grouped by chunk type.  
+  - `unknown_ids.md` – unmapped IDs.  
+  - `unused_known_ids.md` – registered IDs not found in this file.  
+  - `anomalies.md` – suspicious chunk lengths, bad data.  
+  - `viewports.md` – extracted viewport / display settings.  
+  - `dump.txt` – raw tree dump for cross-checking.  
+  - `report.json` – structured machine-readable output.  
 
----
-
-## Example
-
-```bash
-python i3d_analyzer.py domek.i3d
-```
-
-Produces JSON and Markdown outputs for that file.
+- **Format Nuances Covered**  
+  - Multi-UV support via `0x4200 FACE_MAP_CHANNEL`.  
 
 ---
 
-## Limitations
-- Tested only on **static I3D models** so far.
-- Map files and animated I3Ds have not yet been validated.
-- Registry of chunk IDs is incomplete – expect unknowns.
-- JSON float precision can be verbose.
+## Status
+⚠️ Currently only **static I3D models** have been tested.  
+Map files and animated models have not yet been validated.  
+
+The tool is still evolving — expect **unknown IDs** and **partial feature coverage**.
 
 ---
 
 ## Roadmap
-- Expand chunk registry with full Hidden & Dangerous structures.
-- Improve **animation/keyframe parsing**.
-- Add **I3D → OBJ/MTL converter**, including automatic texture copying.
-- Extend tooling to:
-  - Map files.
-  - Animation data.
-  - Other game resource formats.
+- ✅ Static model parsing  
+- 🔄 Animation and keyframe decoding  
+- 🔄 Converter: I3D JSON → OBJ/MTL (+ texture extraction)  
 
 ---
 
 ## Audience
-These tools are meant as **reference utilities** for:
-- Modders who want to extract or edit assets.
-- Researchers documenting the I3D format.
-- Developers writing converters or import/export plugins.
+This repository is primarily aimed at:
+- **Modders** working with *Hidden & Dangerous* assets.  
+- **Researchers** studying legacy Illusion Softworks formats.  
+- **Developers** who want to build converters or importers.  
 
 ---
 
 ## License
-This project is released under the **MIT License**. Contributions are welcome!
+MIT License — feel free to use, adapt, and contribute.
+ 
