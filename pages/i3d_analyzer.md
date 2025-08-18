@@ -56,41 +56,10 @@ This makes the output easier to read, and cleaner for re-use in exporters.
 
 ## Nuances of Hidden & Dangerous I3D
 
-### Materials (`0xAFFF`)
-- Fully parsed including **ambient**, **diffuse**, **specular**, **shininess**, **transparency**, and **Phong shading** flags.  
-- Textures (`MAT_TEXTUREMAP`) list **file paths**, **tiling flags**, and **blur values**.  
-
-### Object Material Groups (`0x4130`)
-- Correctly expanded into:
-  - Material name.  
-  - Number of faces.  
-  - Explicit face indices.  
-- Fixes the problem where earlier analyzers just repeated empty `OBJECT_MATERIAL` stubs.
-
-### Smoothing (`0x4150`)
-- Face-by-face smoothing groups are extracted.  
-- Output shows one smoothing ID per face, useful for checking shading fidelity.
-
 ### Extra UV Maps (`0x4200 FACE_MAP_CHANNEL`)
 - Specific to I3D.  
 - Allows **multiple UV channels per mesh**, unlike vanilla 3DS (which only supports one).  
 - This feature was introduced for Hidden & Dangerous to support multi-texturing (detail maps, lightmaps, etc.).  
-
-### Keyframe Data (`0xB000 KFDATA`)
-- Structural parsing works (e.g. `KFHDR`, `KFCURTIME_RANGE`).  
-- Animation controller semantics are not yet fully decoded.  
-- Only static model testing has been done so far.
-
-### Viewports / Display (`0x7000` series)
-- Blocks such as `0x7001`, `0x7011`, `0x7012`, `0x7020` store **viewport/editor display settings**.  
-- Extracted values include:  
-  - **View type** (Perspective, Top, Left, Camera, etc.)  
-  - **Zoom factor**  
-  - **Pan offsets** (X/Y)  
-  - **Viewport rectangle** coordinates (left, top, right, bottom)  
-  - **Reference object name** (if any)  
-- These were originally written by 3D Studio’s viewport/editor system.  
-- While not directly used by the Hidden & Dangerous engine, they provide **valuable context** for modders trying to reconstruct how the model was viewed or aligned during authoring.
 
 ---
 
@@ -108,3 +77,4 @@ This makes the output easier to read, and cleaner for re-use in exporters.
 - Test on **map files** for performance and scaling.  
 - Expand the registry with all known **Hidden & Dangerous chunk IDs**.  
 - Document quirks of the format (e.g. why some chunks overlap with standard 3DS, while others are I3D-only).
+
