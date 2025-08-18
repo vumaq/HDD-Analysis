@@ -5,7 +5,7 @@ This repository contains tools and documentation for analyzing and working with 
 
 The I3D format is derived from the classic **Autodesk 3D Studio `.3ds` format**, but includes several extensions specific to Illusion Softworks — such as **extra UV map channels**.  
 
-Our goal is to provide **modders and researchers** with reference tools that make it easier to explore, document, and eventually convert I3D assets.
+Our goal is to provide **modders and researchers** with reference tools that make it easier to explore, document, and eventually build tools.
 
 ---
 
