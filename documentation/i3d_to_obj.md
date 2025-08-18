@@ -41,6 +41,7 @@ Applies baked object matrices so meshes appear in in-game positions.
 
 ## Limitations
 - Only the **first UV channel** is exported  
-- Materials assume `.png` textures with matching filenames  
+- Materials assume matching filenames  
 
 - Animations and keyframes (`0xB000` chunks) are not exported
+
