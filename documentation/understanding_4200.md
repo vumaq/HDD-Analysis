@@ -3,6 +3,7 @@
 ## Purpose
 
 The `FACE_MAP_CHANNEL` chunk (`0x4200`) is a custom extension introduced by Illusion Softworks for their I3D format, derived from the classic 3D Studio (`.3ds`) structure.  
+
 Its role is to provide **per-mesh support for multiple UV mapping channels**, something the original 3DS format did not allow. Each occurrence of this chunk defines a complete UV set, identified by its own channel index.
 
 Community research has confirmed its use. For example, one exporter note states:  
@@ -17,9 +18,9 @@ In a standard 3DS file, UVs are stored in the `MAPPINGCOORDS` chunk (`0x4140`). 
 
 The I3D approach in `0x4200` differs in several important ways:
 
-- **Multiple channels per mesh** — Whereas `0x4140` is limited to a single UV layer, `0x4200` may appear multiple times within the same mesh, one for each UV channel. Each chunk begins with an integer channel index to distinguish which UV set it represents (e.g., channel 1 for the base layer, channel 2 for a secondary set, etc.).
-- **Independent UV vertices** — Unlike the 3DS scheme, which assumes UVs map 1:1 with mesh vertices, `0x4200` defines its own list of UV coordinates. This decoupling avoids duplicating geometry when a single vertex needs different UV positions across faces.
-- **Per-face UV indices** — Each chunk also carries a face-UV index array. This mirrors the standard `FACE_ARRAY` (`0x4120`), but for texture coordinates. Every face entry contains three indices, referencing the UV list rather than the geometry vertices.
+- **Multiple channels per mesh** Whereas `0x4140` is limited to a single UV layer, `0x4200` may appear multiple times within the same mesh, one for each UV channel. Each chunk begins with an integer channel index to distinguish which UV set it represents (e.g., channel 1 for the base layer, channel 2 for a secondary set, etc.).
+- **Independent UV vertices** Unlike the 3DS scheme, which assumes UVs map 1:1 with mesh vertices, `0x4200` defines its own list of UV coordinates. This decoupling avoids duplicating geometry when a single vertex needs different UV positions across faces.
+- **Per-face UV indices** Each chunk also carries a face-UV index array. This mirrors the standard `FACE_ARRAY` (`0x4120`), but for texture coordinates. Every face entry contains three indices, referencing the UV list rather than the geometry vertices.
 
 Because of this system, most I3D meshes contain **no `0x4140` data at all**. Instead, their primary UV set is stored under `0x4200` (usually with channel index = 1).
 
@@ -63,3 +64,4 @@ Illusion Softworks needed a way to support more than one UV channel and to decou
 
 The I3D `0x4200` `FACE_MAP_CHANNEL` chunk is a structural upgrade over the classic 3DS `0x4140`.  
 It introduces independent, channel-indexed UV sets with explicit face mappings, allowing multiple texture coordinate layers per mesh. Correct handling of this chunk is essential for accurate import, export, and editing of I3D models.
+
