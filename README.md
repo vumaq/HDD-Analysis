@@ -3,9 +3,9 @@
 ## Overview
 This repository contains tools and documentation for analyzing and working with the **I3D model format** used in *Hidden & Dangerous* and *Hidden & Dangerous Deluxe*.  
 
-The I3D format is derived from the classic **Autodesk 3D Studio `.3ds` format**, but includes several extensions specific to Illusion Softworks — such as **extra UV map channels** and **specialized material definitions**.  
+The I3D format is derived from the classic **Autodesk 3D Studio `.3ds` format**, but includes several extensions specific to Illusion Softworks — such as **extra UV map channels**.  
 
-Our goal is to provide **modders and researchers** with reference tools that make it easier to explore, document, and eventually convert I3D assets for modern use.
+Our goal is to provide **modders and researchers** with reference tools that make it easier to explore, document, and eventually convert I3D assets.
 
 ---
 
