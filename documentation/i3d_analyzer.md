@@ -3,8 +3,7 @@
 📂 [Download Script](../tools/i3d_analyzer.py)
 
 ## Overview
-The `i3d_analyzer.py` tool inspects **Hidden & Dangerous `.i3d` model files**, a variant of the **Autodesk 3D Studio `.3ds` format** with extensions specific to Illusion Softworks.  
-It parses the binary chunk structure, extracts meaningful values, and generates structured reports.  
+The `i3d_analyzer.py` tool inspects **Hidden & Dangerous `.i3d` model files**, a variant of the **Autodesk 3D Studio `.3ds` format** with extensions specific to Illusion Softworks. It parses the binary chunk structure, extracts meaningful values, and generates structured reports.  
 
 Unlike generic 3DS parsers, this analyzer is tailored to the **I3D dialect** used in *Hidden & Dangerous* and *Hidden & Dangerous Deluxe*.
 
@@ -72,4 +71,5 @@ This structure makes the output easy to read and suitable for converters.
 ## Roadmap
 - ✅ Static model parsing  
 - ✅ Decoding of `0x4200 FACE_MAP_CHANNEL`  
+
 - ❌ Animation and keyframe decoding  
