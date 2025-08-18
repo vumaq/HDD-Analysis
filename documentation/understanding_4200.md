@@ -1,54 +1,65 @@
-# Understanding the I3D 0x4200 Chunk
+# The I3D 0x4200 Chunk
 
-## Purpose of the 0x4200 FACE_MAP_CHANNEL Chunk
+## Purpose
 
-The `FACE_MAP_CHANNEL` chunk (ID 0x4200) in I3D files is a custom extension to the classic 3D Studio (.3ds) format used by Illusion Softworks (e.g., *Hidden & Dangerous*). It was introduced to store additional UV mapping data and support multiple UV sets per mesh. A modding forum explains: *“Here from exporter, we create a chunk called FACE_MAP_CHANNEL. Hex value is 0x4200. Code: … //export mapping channels for(int i=1; i….”* ([hidden-and-dangerous.net](https://hidden-and-dangerous.net/board/viewtopic.php?t=43851)).
+The `FACE_MAP_CHANNEL` chunk (`0x4200`) is a custom extension introduced by Illusion Softworks for their I3D format, derived from the classic 3D Studio (`.3ds`) structure.  
+Its role is to provide **per-mesh support for multiple UV mapping channels**, something the original 3DS format did not allow. Each occurrence of this chunk defines a complete UV set, identified by its own channel index.
 
-## Differences from Standard 3DS UV Mapping (Chunk 0x4140)
+Community research has confirmed its use. For example, one exporter note states:  
+> “We create a chunk called FACE_MAP_CHANNEL. Hex value is 0x4200. Code: … // export mapping channels for (int i=1; i…).”  
+([hidden-and-dangerous.net](https://hidden-and-dangerous.net/board/viewtopic.php?t=43851))
 
-In a standard 3DS file, UV coordinates reside in the `MAPPINGCOORDS` chunk (0x4140). Paul Bourke’s 3DS file format documentation outlines that this chunk stores a vertex count followed by that many (U, V) float pairs ([Paul Bourke](http://paulbourke.net/dataformats/3ds/)).  
+---
 
-The 0x4200 chunk differs significantly:
+## Comparison with Standard 3DS UV Mapping (0x4140)
 
-- **Multiple Channels per Mesh**: Unlike 0x4140 (one-and-done), the 0x4200 chunk can appear multiple times in a mesh, each instance carrying a different UV map. Each chunk begins with an integer channel index to identify which UV layer it represents (e.g. 1 for the base UV set, 2 for a second UV set, etc.). This means a single mesh can have UV1, UV2, etc., each stored in its own 0x4200 chunk.
-- **Independent UV Vertices**: The 0x4200 chunk stores its own list of UV coordinates and does not assume a 1:1 correspondence with the mesh’s vertex list. In the original 3DS scheme, texture coordinates are essentially parallel to the vertex list (and if a vertex needed two different UV positions on different faces, the old format often duplicated that vertex). In contrast, the I3D format decouples them: each UV map has its own UV vertex list and faces refer to those UV vertices by index.
-- **Face Mapping Indices**: Along with UV coordinates, each 0x4200 chunk contains a face-UV index list. This is analogous to the regular face index list (`FACE_ARRAY` 0x4120), but for UVs. Each face of the mesh has three indices referencing the UV coordinate list (one index per triangle corner).
+In a standard 3DS file, UVs are stored in the `MAPPINGCOORDS` chunk (`0x4140`). As documented by [Paul Bourke](http://paulbourke.net/dataformats/3ds/), this format simply lists a count of vertices followed by a corresponding series of `(U, V)` pairs.  
 
-#### No 0x4140 in I3D
+The I3D approach in `0x4200` differs in several important ways:
 
-Because I3D uses the new chunk, you’ll often not find a 0x4140 chunk at all in those files. The primary UV map is stored as a 0x4200 chunk (usually with channel index 1) instead.
+- **Multiple channels per mesh** — Whereas `0x4140` is limited to a single UV layer, `0x4200` may appear multiple times within the same mesh, one for each UV channel. Each chunk begins with an integer channel index to distinguish which UV set it represents (e.g., channel 1 for the base layer, channel 2 for a secondary set, etc.).
+- **Independent UV vertices** — Unlike the 3DS scheme, which assumes UVs map 1:1 with mesh vertices, `0x4200` defines its own list of UV coordinates. This decoupling avoids duplicating geometry when a single vertex needs different UV positions across faces.
+- **Per-face UV indices** — Each chunk also carries a face-UV index array. This mirrors the standard `FACE_ARRAY` (`0x4120`), but for texture coordinates. Every face entry contains three indices, referencing the UV list rather than the geometry vertices.
 
-### Byte-Level Structure of the 0x4200 Chunk
+Because of this system, most I3D meshes contain **no `0x4140` data at all**. Instead, their primary UV set is stored under `0x4200` (usually with channel index = 1).
 
-Each `FACE_MAP_CHANNEL` chunk follows a specific binary layout (after the standard 6-byte 3DS chunk header consisting of the ID 0x4200 and length). In byte-level terms, the content of the chunk is organized as follows:
+---
 
-| Offset (bytes) | Data Type  | Description |
-| -------------- | ---------- | ----------- |
-| 0x0            | int32      | UV channel index (identifies which UV set this is) |
-| 0x4            | uint16     | Number of UV vertices (N) in this channel |
-| 0x6            | float × 2 × N | List of N UV coordinate pairs (each entry = 2 floats: U and V) |
-| ...            |            | ... |
-| ...            | uint16     | Number of faces (M) – should match the mesh’s face count |
-| ...            | uint16 × 3 × M | UV face index list: M entries, each 3 indices (one per face corner) |
+## Binary Layout
 
-For example:  
-- Bytes `01 00 00 00` → `channel index = 1`  
-- Bytes `0A 00` → `N = 10` UV vertices, followed by 10 × (U, V) floats (80 bytes)  
-- Next `uint16 M = 32` → 32 faces, followed by 32 × 3 × 2 bytes of UV indices.
+After the usual 6-byte chunk header (`id=0x4200`, `length`), the chunk data is laid out as follows:
 
-## Why 0x4200 Was Introduced: Hidden & Dangerous
+| Offset (bytes) | Type            | Meaning |
+| -------------- | --------------- | ------- |
+| 0x00           | int32           | Channel index (identifies the UV set) |
+| 0x04           | uint16          | Number of UV vertices (N) |
+| 0x06           | float × 2 × N   | List of N `(U, V)` coordinate pairs |
+| ...            | uint16          | Number of faces (M) – should equal mesh face count |
+| ...            | uint16 × 3 × M  | UV face indices (3 per face, referencing the UV list) |
 
-Illusion Softworks introduced FACE_MAP_CHANNEL in *Hidden & Dangerous* to overcome the single-UV limitation of 3DS. The chunk allows UV coordinates stored “with [an] ID, x position, y position” per map, instead of being tied per face ([hidden-and-dangerous.net](https://hidden-and-dangerous.net/board/viewtopic.php?t=43851)).
+**Example:**  
+- `01 00 00 00` → channel index = 1  
+- `0A 00` → 10 UV vertices, followed by 10 × `(U, V)` pairs (80 bytes)  
+- `20 00` → 32 faces, followed by 32 × 3 indices (per face corner)
 
-## Blender Import Issues
+---
 
-Most modern importers—including Blender's default 3DS importer—don’t recognize 0x4200. One user noted issues preserving UV maps when importing I3D files into Blender ([hidden-and-dangerous.net](https://hidden-and-dangerous.net/board/viewtopic.php?t=43851)).
+## Why It Exists
 
-## Workarounds and Tools
+The introduction of `FACE_MAP_CHANNEL` was a practical requirement for *Hidden & Dangerous*.  
+Illusion Softworks needed a way to support more than one UV channel and to decouple texture mapping from geometry. By doing so, they enabled techniques like multiple textures, detail maps, or lightmaps that the single-UV `0x4140` scheme could not accommodate ([hidden-and-dangerous.net](https://hidden-and-dangerous.net/board/viewtopic.php?t=43851)).
 
-- **Use the original 3ds Max I3D plugin:** Supports 0x4200 (for Max 3.0/3.1) ([hidden-and-dangerous.net](https://hidden-and-dangerous.net/board/viewtopic.php?p=15301#p15301)).  
-- **Custom scripts/tools:** Parse 0x4200 chunks manually using the structure described above.
+---
 
-## Conclusion
+## Import and Tooling Notes
 
-The I3D 0x4200 `FACE_MAP_CHANNEL` chunk enables multi-UV support in *Hidden & Dangerous* model files by embedding separate UV coordinate lists and per-face indices per channel. Understanding its structure is essential for accurate importing, exporting, or editing of these files.
+- **Blender Import** Blender’s stock 3DS importer does not support this extension, so I3D models often lose their UV mapping on import.  
+- **3ds Max I3D plugin** The original plugin for Max 3.0/3.1 includes support for this chunk ([hidden-and-dangerous.net](https://hidden-and-dangerous.net/board/viewtopic.php?p=15301#p15301)).  
+- **Custom tooling** Scripts and analyzers that specifically handle `0x4200` are required for faithful conversion.
+
+---
+
+## Summary
+
+The I3D `0x4200` `FACE_MAP_CHANNEL` chunk is a structural upgrade over the classic 3DS `0x4140`.  
+It introduces independent, channel-indexed UV sets with explicit face mappings, allowing multiple texture coordinate layers per mesh. Correct handling of this chunk is essential for accurate import, export, and editing of I3D models.
