@@ -53,12 +53,6 @@ python i3d_to_obj.py domek.i3d --transform "(x, -z, y)"
 python i3d_to_obj.py domek.i3d --bake
 ```
 
-Produces:
-- `domek.obj`  
-- `domek.mtl`  
-in the same directory as the source `.i3d`.  
-Textures should be placed alongside the `.i3d` file.
-
 ---
 
 ## License
