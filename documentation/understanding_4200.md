@@ -7,7 +7,7 @@ The `FACE_MAP_CHANNEL` chunk (`0x4200`) is a custom extension introduced by Illu
 Its role is to provide **per-mesh support for multiple UV mapping channels**, something the original 3DS format did not allow. Each occurrence of this chunk defines a complete UV set, identified by its own channel index.
 
 Community research has confirmed its use. For example, one exporter note states:  
-> “We create a chunk called FACE_MAP_CHANNEL. Hex value is 0x4200. Code: … // export mapping channels for (int i=1; i…).”  
+> “The address 0x4200 contains equivalents for both 0x4140 (TEX_VERTS) and 0x4120 (FACE_ARRAY)”  
 ([hidden-and-dangerous.net](https://hidden-and-dangerous.net/board/viewtopic.php?t=43851))
 
 ---
@@ -48,14 +48,14 @@ After the usual 6-byte chunk header (`id=0x4200`, `length`), the chunk data is l
 ## Why It Exists
 
 The introduction of `FACE_MAP_CHANNEL` was a practical requirement for *Hidden & Dangerous*.  
-Illusion Softworks needed a way to support more than one UV channel and to decouple texture mapping from geometry. By doing so, they enabled techniques like multiple textures, detail maps, or lightmaps that the single-UV `0x4140` scheme could not accommodate ([hidden-and-dangerous.net](https://hidden-and-dangerous.net/board/viewtopic.php?t=43851)).
+Illusion Softworks needed a way to support more than one UV channel and to decouple texture mapping from geometry. By doing so, they enabled techniques like multiple textures, detail maps, or lightmaps that the single-UV `0x4140` scheme could not accommodate.
 
 ---
 
 ## Import and Tooling Notes
 
 - **Blender Import** Blender’s stock 3DS importer does not support this extension, so I3D models often lose their UV mapping on import.  
-- **3ds Max I3D plugin** The original plugin for Max 3.0/3.1 includes support for this chunk ([hidden-and-dangerous.net](https://hidden-and-dangerous.net/board/viewtopic.php?p=15301#p15301)).  
+- **3ds Max I3D plugin** The original plugin for Max 3.0/3.1 includes support for this chunk.
 - **Custom tooling** Scripts and analyzers that specifically handle `0x4200` are required for faithful conversion.
 
 ---
@@ -64,4 +64,5 @@ Illusion Softworks needed a way to support more than one UV channel and to decou
 
 The I3D `0x4200` `FACE_MAP_CHANNEL` chunk is a structural upgrade over the classic 3DS `0x4140`.  
 It introduces independent, channel-indexed UV sets with explicit face mappings, allowing multiple texture coordinate layers per mesh. Correct handling of this chunk is essential for accurate import, export, and editing of I3D models.
+
 
