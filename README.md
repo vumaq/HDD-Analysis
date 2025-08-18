@@ -62,8 +62,6 @@ This makes the output easier to read, and cleaner for re-use in exporters.
 - Allows **multiple UV channels per mesh**, unlike vanilla 3DS (which only supports one).  
 - This feature was introduced for Hidden & Dangerous to support multi-texturing (detail maps, lightmaps, etc.).
 
-[Understanding 4200](../documentation/understanding_4200.md)
-
 ---
 
 ## Known Limitations
