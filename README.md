@@ -15,7 +15,6 @@ Unlike generic 3DS parsers, this analyzer focuses on the **Illusion Softworks I3
 ## Goals
 - Reverse-engineer the **I3D variant** of the 3DS format.  
 - Provide clear **visual reports** of the structure and values.  
-- Support modders and researchers by enabling export to **intermediate JSON**.  
 
 ⚠️ **Important**: So far this has only been tested on **static I3D models**, not animations or map files.
 
