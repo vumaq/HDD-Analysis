@@ -131,6 +131,8 @@ This document expands the meaning of all known chunk IDs from the
 
   This allows multiple textures to map differently onto the same geometry, a feature absent from legacy I3D files. Importers that don't handle this chunk will usually fail to reproduce correct UV layouts.
 
+  [Understanding 4200](../documentation/understanding_4200.md)
+
 ---
 
 ## Light and Camera
