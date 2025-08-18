@@ -74,9 +74,21 @@ This makes the output easier to read, and cleaner for re-use in exporters.
 
 ---
 
-## Future Work
-- Add robust **animation/keyframe parsing**.  
-- Build a **converter from I3D JSON → OBJ/MTL**, copying referenced textures into place.  
-- Test on **map files** for performance and scaling.  
-- Expand the registry with all known **Hidden & Dangerous chunk IDs**.  
-- Document quirks of the format (e.g. why some chunks overlap with standard 3DS, while others are I3D-only).
+## Roadmap
+- ✅ Static model parsing  
+- 🔄 Animation and keyframe decoding  
+- 🔄 Converter: I3D JSON → OBJ/MTL (+ texture extraction)  
+
+---
+
+## Audience
+This repository is primarily aimed at:
+- **Modders** working with *Hidden & Dangerous* assets.  
+- **Researchers** studying legacy Illusion Softworks formats.  
+- **Developers** who want to build converters or importers.  
+
+---
+
+## License
+MIT License — feel free to use, adapt, and contribute.
+ 
