@@ -8,7 +8,7 @@ The I3D format is derived from the **Autodesk 3D Studio `.3ds` format**, but ext
 
 ## Roadmap
 
-- ✅ Static model parsing  
+- ✅ I3D Chunk analysis  
 - ✅ Decoding of `0x4200 FACE_MAP_CHANNEL` (extra UVs)  
 - ✅ Proof-of-concept: I3D → OBJ
 - ❌ Roundtrip: I3D → OBJ → I3D
