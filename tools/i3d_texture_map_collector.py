@@ -8,7 +8,6 @@ I3D Texture Map Collector (local paths, script-dir output)
   but copied filenames keep the original case as written in the I3D.
 - Copies found files from configured local search paths into the SAME FOLDER as this script.
 - Missing files are reported to the console only (no files written).
-- Only supports .i3d files (no .3ds).
 
 Usage:
   python i3d_textures_fetch.py path/to/file.i3d
@@ -206,3 +205,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
