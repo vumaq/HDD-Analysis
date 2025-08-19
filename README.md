@@ -65,6 +65,46 @@ python i3d_to_obj.py domek.i3d --bake
 
 ---
 
+### 3. I3D Texture Map Collector
+
+📄 [Documentation](documentation/i3d_texture_map_collector.md)  
+⚙️ [Download Script](tools/i3d_texture_map_collector.py)
+
+Scans an I3D file for texture references and copies the found images into the **same folder as the script**, ready for use in downstream tools.  
+
+**Usage:**
+```bash
+python i3d_texture_map_collector.py domek.i3d
+```
+
+On first run, generates a config file (`i3d_textures.config.json`) with `search_paths` you can edit to point to your texture directories.
+
+---
+
+### 4. OBJ → I3D Converter
+
+📄 [Documentation](documentation/obj_to_i3d.md)  
+⚙️ [Download Script](tools/obj_to_i3d.py)
+
+Converts **Wavefront OBJ + MTL** files back into the **I3D format**. Supports materials, UV mapping, smoothing groups, and optional keyframer data.  
+
+**Usage:**
+```bash
+# Basic conversion
+python obj_to_i3d.py cube.obj
+
+# Custom object name
+python obj_to_i3d.py cube.obj --name "MyObject"
+
+# With keyframer block
+python obj_to_i3d.py cube.obj --kf
+
+# Without V-flip (preserve OBJ's native V orientation)
+python obj_to_i3d.py cube.obj --no-flip-v
+```
+
+---
+
 ## License
 
 MIT License — free to use, modify, and share.
