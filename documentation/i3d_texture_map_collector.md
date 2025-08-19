@@ -4,7 +4,7 @@
 
 ## Overview
 
-The `i3d_texture_map_collector.py` script scans an **Illusion Softworks I3D** file for texture references and copies the found images into the **same folder as the script**, so they're ready for downstream tools like converters or viewers. It mirrors the concise, practical style used in the `i3d_to_obj.md` write-up.
+The `i3d_texture_map_collector.py` script scans an **Illusion Softworks I3D** file for texture references and copies the found images into the **same folder as the script**, so they're ready for downstream tools like converters or viewers.
 
 It parses material chunks to extract texture file paths, supports any image extension, and performs **case-insensitive** matching on disk while preserving original filename casing when copying.
 
@@ -74,4 +74,5 @@ Edit this file to point to the directories where your textures are stored.
 
 -   Does not recurse into subdirectories of `search_paths` (top-level only)
 -   Missing files are not auto-downloaded; they must exist locally
+
 
