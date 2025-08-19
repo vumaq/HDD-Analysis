@@ -12,19 +12,19 @@ It parses material chunks to extract texture file paths, supports any image exte
 
 ## Features
 
--   **Texture path extraction** reads `MAT_MAP_FILEPATH (0xA300)`
+-   **Texture path extraction** - reads `MAT_MAP_FILEPATH (0xA300)`
     entries from material blocks to discover referenced maps.
--   **Any extension supported** not limited to PNG; TGA, BMP, JPG,
+-   **Any extension supported** - not limited to PNG; TGA, BMP, JPG,
     etc., are all considered by basename.
--   **Case-insensitive lookup, case-preserving copy** finds files
+-   **Case-insensitive lookup, case-preserving copy** - finds files
     regardless of on-disk casing; copied names keep the I3D's original
     case.
--   **Config-driven search paths** auto-creates
+-   **Config-driven search paths** - auto-creates
     `i3d_textures.config.json` on first run; edit `search_paths` to your
     local texture directories.
--   **Safe copy behavior** skips overwriting existing files in the
+-   **Safe copy behavior** - skips overwriting existing files in the
     script folder; logs missing textures to the console.
--   **Flat output** all collected textures are copied directly into
+-   **Flat output** - all collected textures are copied directly into
     the script's directory.
 
 ---
@@ -74,5 +74,6 @@ Edit this file to point to the directories where your textures are stored.
 
 -   Does not recurse into subdirectories of `search_paths` (top-level only)
 -   Missing files are not auto-downloaded; they must exist locally
+
 
 
