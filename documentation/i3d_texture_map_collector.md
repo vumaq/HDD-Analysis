@@ -72,6 +72,6 @@ Edit this file to point to the directories where your textures are stored.
 
 ## Limitations
 
--   Only supports `.i3d` files (no `.3ds` parsing)
 -   Does not recurse into subdirectories of `search_paths` (top-level only)
 -   Missing files are not auto-downloaded; they must exist locally
+
