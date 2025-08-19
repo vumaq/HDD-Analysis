@@ -113,9 +113,15 @@ def collect_texture_basenames(i3d_path: Path) -> List[str]:
 
 # ---- Config (auto-generate on first run)
 DEFAULT_CONFIG = {
-    "search_paths": ["C:/game/maps/textures/"]  # edit this after first run
+    "search_paths": [
+        "C:/Program Files (x86)/Take2/Hidden and Dangerous Deluxe/data/maps/maps",
+        "C:/Program Files (x86)/Take2/Hidden and Dangerous Deluxe/data/maps/maps/censored",
+        "C:/Program Files (x86)/Take2/Hidden and Dangerous Deluxe/data/maps/maps/faces",
+        "C:/Program Files (x86)/Take2/Hidden and Dangerous Deluxe/data/maps/maps/gamemenu",
+        "C:/Program Files (x86)/Take2/Hidden and Dangerous Deluxe/data/maps/maps/menu"           
+    ] 
 }
-CONFIG_FILE = Path(__file__).with_name("i3d_textures.config.json")
+CONFIG_FILE = Path(__file__).with_name("C:/Users/z87/OneDrive/Dropbox/Projects/Personal/Hidden and Dangerous Project/analysis25/Project 2024/maps/maps")
 
 def ensure_config_exists() -> dict:
     if not CONFIG_FILE.exists():
