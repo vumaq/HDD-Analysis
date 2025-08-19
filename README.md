@@ -8,14 +8,20 @@ The I3D format is derived from the **Autodesk 3D Studio `.3ds` format**, but ext
 
 ## Roadmap
 
+### Phase 1
 - ✅ I3D Chunk analysis - **Successful with multiple i3d files**
 - ✅ Decoding of `0x4200 FACE_MAP_CHANNEL` - **Fully understood and documented**
 - ✅ Fetch textmaps: **Successful with door.i3d**
 - ✅ Proof-of-concept: I3D → OBJ - **Successful with domek.i3d**
 - ✅ Roundtrip: I3D → OBJ → I3D - **Successful with door.i3d**
+- ❌ Ingame testing of theoretical success
+
+### Phase 2
 - ❌ Convert I3D to 3DS
 - ❌ Convert 3DS to I3D
-- ❌ Animation/keyframe decoding  
+- ❌ Animation/keyframe decoding
+
+### Phase 3
 - ❌ Blender .i3d importer that respects I3D-specific chunks  
 - ❌ Blender .i3d exporter
 
