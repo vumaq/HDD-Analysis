@@ -163,6 +163,10 @@ def _read_pct_block(f, sub_end):
 # -----------------------------
 CID_REG = {
     0x4D4D: {"name": "PRIMARY", "strategy": "container"},
+    
+    0xA08A: {"name": "MAT_TRANS_FALLOFF_IN", "strategy": "flat"},    
+    0xA08C: {"name": "MAT_SOFTEN", "strategy": "flat"},
+
     0x0002: {"name": "M3D_VERSION", "strategy": "flat"},
     0x3D3D: {"name": "OBJECTINFO", "strategy": "container"},
     0x3D3E: {"name": "EDIT_CONFIG", "strategy": "flat"},
@@ -462,7 +466,11 @@ def handle_material(f, ln, depth, out, chunks, anomalies, parent_idx):
                         except Exception:
                             pass
             elif scid == 0xA081 and slen == 6:
-                value_line(out, depth, "Two-sided: ON", to_idx=sidx)
+                value_line(out, depth, "Two-sided: ON", to_idx=sidx)            
+            elif scid == 0xA08A and slen == 6:
+                value_line(out, depth, "Opacity Falloff: IN (flag)", to_idx=sidx)
+            elif scid == 0xA08C and slen == 6:
+                value_line(out, depth, "Soften: ON", to_idx=sidx)
             elif scid == 0xA087 and slen >= 10:
                 v = struct.unpack("<f", f.read(4))[0]
                 value_line(out, depth, f"Wire Size: {fmtf(v)}", to_idx=sidx)
