@@ -71,16 +71,13 @@ class OBJData:
         self.v = []         # [(x,y,z)]
         self.vt = []        # [(u,v)]
         self.vn = []        # [(nx,ny,nz)]
-        # faces grouped by material: OrderedDict preserves first-seen order
-        # key: material name or None
-        # val: list of dicts { 'tri': ((vi,ti,ni),(vi,ti,ni),(vi,ti,ni)), 'sg': smoothing_group_int }
         self.faces_by_mat = OrderedDict()
         self.mtl_file = None
         self.object_name = None
 
 class MTLData:
     def __init__(self):
-        self.materials = OrderedDict()  # name -> { 'Kd': (r,g,b), 'map_Kd': filename }
+        self.materials = OrderedDict()
 
 def parse_mtl(path):
     mtl = MTLData()
@@ -189,7 +186,6 @@ def parse_obj(path):
                 if current_mat not in obj.faces_by_mat:
                     obj.faces_by_mat[current_mat] = []
 
-                # fan triangulate
                 for j in range(1, len(refs) - 1):
                     a, b, c = refs[0], refs[j], refs[j + 1]
                     tri = []
@@ -221,15 +217,11 @@ def is_two_sided_material(name: str) -> bool:
     return "2sd" in s or "two" in s
 
 def build_material_chunks(mtl: MTLData, used_mats_in_order):
-    """
-    Emit MATERIAL chunks only for materials present in the MTL file and referenced by faces.
-    """
     chunks = []
     for name in used_mats_in_order:
         if not name or name not in mtl.materials:
             continue
         props = mtl.materials.get(name, {})
-
         sub = []
         sub.append(build_chunk(MAT_NAME, pack_c_string(name)))
         if "Kd" in props:
@@ -241,7 +233,6 @@ def build_material_chunks(mtl: MTLData, used_mats_in_order):
             tex = props["map_Kd"]
             tsubs = [ build_chunk(MAT_TEXNAME, pack_c_string(os.path.basename(tex))) ]
             sub.append(build_chunk(MAT_TEXMAP, b"", tsubs))
-
         chunks.append(build_chunk(MATERIAL, b"", sub))
     return chunks
 
@@ -251,7 +242,7 @@ def assemble_faces_uv_corners(obj: OBJData):
     for key, recs in obj.faces_by_mat.items():
         if not recs:
             continue
-        mk = key  # keep None if no material
+        mk = key
         if mk not in used_mats_in_order:
             used_mats_in_order.append(mk)
         for rec in recs:
@@ -309,26 +300,17 @@ def build_uv_channel_dedup(obj: OBJData, faces_uv, *, flip_v=True, channel_index
 
 def build_mesh_chunks(obj: OBJData, object_name: str, *, flip_v=True):
     faces_geo, faces_uv, sgroups, used_mats_in_order = assemble_faces_uv_corners(obj)
-
-    # Axis tweak only (no uniform scaling)
     vertices = [(x, -y, -z) for (x, y, z) in obj.v]
     enforce_3ds_limits(len(vertices), len(faces_geo))
     log(f"[I3D] Geometry: {len(vertices)} verts, {len(faces_geo)} faces; materials referenced: {len([m for m in used_mats_in_order if m])}")
-
-    # 0x4110
     v_payload = struct.pack("<H", len(vertices)) + b"".join(struct.pack("<fff", *p) for p in vertices)
     vert_chunk = build_chunk(OBJECT_VERTICES, v_payload)
-
-    # 0x4120 (+ 0x4130 groups and 0x4150 smooth INSIDE faces)
     f_payload = struct.pack("<H", len(faces_geo))
     for (a, b, c, _mk) in faces_geo:
         if a is None or b is None or c is None:
             raise ValueError("Face has missing vertex index.")
         f_payload += struct.pack("<HHHH", a, b, c, 0)
-
     face_sub = []
-
-    # Material groups (only for named materials)
     mat_to_indices = defaultdict(list)
     for idx, (_, _, _, mk) in enumerate(faces_geo):
         if mk:
@@ -338,33 +320,24 @@ def build_mesh_chunks(obj: OBJData, object_name: str, *, flip_v=True):
             continue
         sub = pack_c_string(mk) + struct.pack("<H", len(idxs)) + b"".join(struct.pack("<H", i) for i in idxs)
         face_sub.append(build_chunk(OBJECT_MAT_GROUP, sub))
-
-    # Smoothing chunk as a subchunk of faces
     smooth_chunk = smoothing_chunk_from_groups(sgroups)
     face_sub.append(smooth_chunk)
-
     faces_chunk = build_chunk(OBJECT_FACES, f_payload, face_sub)
-
-    # Determine if there are **valid** UVs referenced by faces
     has_uvs = (len(obj.vt) > 0) and any(
         any((ti is not None) and (0 <= ti < len(obj.vt)) for ti in triplet)
         for triplet in faces_uv
     )
-
-    # Optional 0x4200 (I3D UV channel) — only when UVs exist
     mesh_children = [vert_chunk, faces_chunk]
     if has_uvs:
         uv4200_chunk = build_uv_channel_dedup(obj, faces_uv, flip_v=flip_v, channel_index=1)
         mesh_children.append(uv4200_chunk)
     else:
         log("[I3D] No valid UVs detected; skipping FACE_MAP_CHANNEL (0x4200).")
-
     mesh_chunk = build_chunk(OBJECT_MESH, b"", mesh_children)
     obj_chunk  = build_chunk(OBJECT, pack_c_string(object_name), [mesh_chunk])
-
     return obj_chunk, used_mats_in_order
 
-# ---------------- Optional Keyframer (baseline) ----------------
+# ---------------- Optional Keyframer ----------------
 
 def kf_header_chunk(scene_name: str, anim_len_frames=100, current_frame=0):
     payload = pack_c_string(scene_name) + struct.pack("<II", int(anim_len_frames), int(current_frame))
@@ -397,20 +370,16 @@ def build_i3d_file(obj: OBJData, mtl: MTLData, object_name: str, *, flip_v=True,
       - FACE_MAP_CHANNEL (0x4200) only when faces actually reference UVs
     """
     version_chunk = build_chunk(M3D_VERSION, struct.pack("<I", 200))
-
     obj_chunk, used_mats_in_order = build_mesh_chunks(obj, object_name, flip_v=flip_v)
     mat_chunks = build_material_chunks(mtl, used_mats_in_order)
-
     objectinfo_children = []
     objectinfo_children += mat_chunks
     objectinfo_children.append(obj_chunk)
     objectinfo = build_chunk(OBJECTINFO, b"", objectinfo_children)
-
     children = [version_chunk, objectinfo]
     if include_kf:
         kf = build_kfdata_root(object_name, scene_name=object_name)
         children.append(kf)
-
     return build_chunk(PRIMARY, b"", children)
 
 # ---------------- CLI ----------------
@@ -418,7 +387,6 @@ def build_i3d_file(obj: OBJData, mtl: MTLData, object_name: str, *, flip_v=True,
 def main():
     ap = argparse.ArgumentParser(description="OBJ(+MTL) → I3D (minimal). No scale/xform/edit-config. Optional --kf. UVs via 0x4200 when present.")
     ap.add_argument("obj", help="Path to input .obj")
-    ap.add_argument("-o", "--out", help="Path to output .i3d (default: alongside .obj with same basename)")
     ap.add_argument("--name", help="Object name (default: OBJ 'o' or filename)")
     ap.add_argument("--no-flip-v", action="store_true", help="Do NOT flip V (default flips: v = 1 - v)")
     ap.add_argument("--kf", action="store_true", help="Include minimal Keyframer (0xB000) data")
@@ -429,13 +397,12 @@ def main():
         log(f"[ERR] OBJ not found: {in_obj}")
         sys.exit(1)
 
-    out_path = os.path.abspath(args.out) if args.out else os.path.splitext(in_obj)[0] + ".i3d"
+    out_path = os.path.splitext(in_obj)[0] + ".i3d"
 
     obj = parse_obj(in_obj)
     mtl = parse_mtl(obj.mtl_file)
     object_name = args.name or obj.object_name or os.path.splitext(os.path.basename(in_obj))[0]
 
-    # Minimal, uncluttered config summary
     log(f"[CFG] Object name : {object_name}")
     log(f"[CFG] Output I3D  : {out_path}")
     log(f"[CFG] UV channel  : 1 (0x4200 when present)")
