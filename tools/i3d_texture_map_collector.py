@@ -120,7 +120,7 @@ DEFAULT_CONFIG = {
         "C:/Program Files (x86)/Take2/Hidden and Dangerous Deluxe/data/maps/maps/menu"           
     ] 
 }
-CONFIG_FILE = Path(__file__).with_name("C:/Users/z87/OneDrive/Dropbox/Projects/Personal/Hidden and Dangerous Project/analysis25/Project 2024/maps/maps")
+CONFIG_FILE = Path(__file__).with_name("i3d_textures.config.json")
 
 def ensure_config_exists() -> dict:
     if not CONFIG_FILE.exists():
@@ -205,4 +205,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
