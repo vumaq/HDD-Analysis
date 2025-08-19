@@ -4,6 +4,7 @@
 
 ## Overview
 The `obj_to_i3d.py` script converts standard **Wavefront OBJ models** (with optional MTL files) into the **Illusion Softworks I3D format**.  
+
 It is designed to recreate meshes, UVs, materials, and smoothing groups in the original I3D structure, making round-tripping between formats possible.
 
 ---
@@ -53,3 +54,4 @@ Preserves the OBJ’s native V coordinate orientation.
 - Only exports a single mesh object per file  
 
 ---
+
