@@ -1,0 +1,19 @@
+# Each side uses one of the dice images
+
+newmtl face1
+map_Kd 1.png
+
+newmtl face2
+map_Kd 2.png
+
+newmtl face3
+map_Kd 3.png
+
+newmtl face4
+map_Kd 4.png
+
+newmtl face5
+map_Kd 5.png
+
+newmtl face6
+map_Kd 6.png
