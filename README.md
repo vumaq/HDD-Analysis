@@ -10,7 +10,8 @@ The I3D format is derived from the **Autodesk 3D Studio `.3ds` format**, but ext
 
 - ✅ Static model parsing  
 - ✅ Decoding of `0x4200 FACE_MAP_CHANNEL` (extra UVs)  
-- ✅ Proof-of-concept: **I3D → OBJ conversion**  
+- ✅ Proof-of-concept: I3D → OBJ
+- ❌ Roundtrip: I3D → OBJ → I3D
 - ❌ Animation/keyframe decoding  
 - ❌ Blender .i3d importer that respects I3D-specific chunks  
 - ❌ Blender .i3d exporter
