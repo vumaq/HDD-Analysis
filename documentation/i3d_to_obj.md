@@ -4,6 +4,7 @@
 
 ## Overview
 The `i3d_to_obj.py` script converts **Illusion Softworks I3D models** into the widely supported **Wavefront OBJ** format.  
+
 It is designed to preserve meshes, UVs, and materials so assets can be opened in Blender, MeshLab, Microsoft 3D Viewer, and other tools.
 
 ---
@@ -44,4 +45,5 @@ Applies baked object matrices so meshes appear in in-game positions.
 - Materials assume matching filenames  
 
 - Animations and keyframes (`0xB000` chunks) are not exported
+
 
