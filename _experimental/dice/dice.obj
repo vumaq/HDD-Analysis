@@ -10,20 +10,18 @@ v  0.5 -0.5  0.5
 v  0.5  0.5  0.5
 v -0.5  0.5  0.5
 
-# Standard UV square
 vt 0 0
 vt 1 0
 vt 1 1
 vt 0 1
 
-# Mirrored horizontally (U flipped)
 vt 1 0
 vt 0 0
 vt 0 1
 vt 1 1
 
 usemtl face1
-f 1/5 2/6 3/7 4/8   # <- now uses mirrored UVs
+f 1/5 2/6 3/7 4/8
 
 usemtl face2
 f 5/1 6/2 7/3 8/4
@@ -32,10 +30,10 @@ usemtl face3
 f 1/1 5/2 8/3 4/4
 
 usemtl face4
-f 2/5 6/6 7/7 3/8   # <- mirrored UVs
+f 2/5 6/6 7/7 3/8
 
 usemtl face5
-f 4/5 3/6 7/7 8/8   # <- mirrored UVs
+f 4/5 3/6 7/7 8/8
 
 usemtl face6
 f 1/1 2/2 6/3 5/4
