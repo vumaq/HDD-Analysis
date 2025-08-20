@@ -19,7 +19,7 @@ The I3D format is derived from the **Autodesk 3D Studio `.3ds` format**, but ext
 ### Phase 2
 - ✅ Convert I3D to 3DS **Successful with die_0.i3d**
 - ❌ Convert 3DS to I3D
-- ✅ Animation/keyframe decoding
+- ❌ Animation/keyframe decoding
 - ❌ Ingame testing of theoretical success
 
 ---
