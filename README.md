@@ -17,13 +17,10 @@ The I3D format is derived from the **Autodesk 3D Studio `.3ds` format**, but ext
 - ❌ Ingame testing of theoretical success
 
 ### Phase 2
-- ❌ Convert I3D to 3DS
-- ❌ Convert 3DS to I3D
-- ❌ Animation/keyframe decoding
-
-### Phase 3
-- ❌ Blender .i3d importer that respects I3D-specific chunks  
-- ❌ Blender .i3d exporter
+- ✅ Convert I3D to 3DS
+- ✅ Convert 3DS to I3D
+- ✅ Animation/keyframe decoding
+- ❌ Ingame testing of theoretical success
 
 ---
 
