@@ -229,6 +229,9 @@ CID_REG = {
     0x7011: {"name": "VIEWPORT_DATA", "strategy": "flat"},
     0x7012: {"name": "VIEWPORT_DATA_3", "strategy": "flat"},
     0x7020: {"name": "MESH_DISPLAY", "strategy": "flat"},
+    0x2426: {"name": "VENDOR_2426", "strategy": "container"},  # non-standard / vendor-specific
+    0x948D: {"name": "VENDOR_948D", "strategy": "container"},  # non-standard / vendor-specific
+    0x9F59: {"name": "VENDOR_9F59", "strategy": "container"},  # non-standard / vendor-specific
 }
 
 # Add helper/color/percent and KF ids so they aren't UNKNOWN

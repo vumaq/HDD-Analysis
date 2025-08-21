@@ -2,7 +2,7 @@
 
 This document expands the meaning of all known chunk IDs from the
 `CID_REG` table. Each entry includes the **chunk ID**, **official/common name**, and a
-**detailed description** explaining its role, structure, and context in I3D files.
+detailed description explaining its role, structure, and context in I3D files.
 
 ---
 
@@ -72,6 +72,12 @@ This document expands the meaning of all known chunk IDs from the
 - **0xA200 -- MAT_TEXMAP**  
   Texture map container. Holds subchunks describing how a texture is applied.
 
+- **0xA220 -- MAT_REFLMAP**  
+  Reflection map container. Stores reflection texture information including percentage, filename, tiling, and offsets.
+
+- **0xA230 -- MAT_BUMPMAP**  
+  Bump map container. Defines bump mapping parameters such as bump strength and texture filename.
+
 - **0xA300 -- MAT_MAP_FILEPATH**  
   Path to the texture file as a C-string.
 
@@ -124,7 +130,7 @@ This document expands the meaning of all known chunk IDs from the
 
 - **0x4200 -- FACE_MAP_CHANNEL (I3D-specific)**  
   Defines an **extra UV channel** beyond the base set. Unlike standard I3D, I3D supports multi-channel mapping for more complex texture setups.  
-  The chunk typically includes:
+  The chunk typically includes:  
   - A channel identifier  
   - UV coordinates for that channel  
   - Per-face references into the UV set  
@@ -222,43 +228,23 @@ This document expands the meaning of all known chunk IDs from the
 - **0xB022 -- SCL_TRACK_TAG**  
   Scale track. Holds per-key scaling values.
 
+- **0xB023 -- FOV_TRACK_TAG**  
+  Field-of-view track. Stores camera zoom/FOV keyframes over time.
+
+- **0xB024 -- ROLL_TRACK_TAG**  
+  Roll track. Contains camera roll angle keyframes.
+
+- **0xB025 -- COL_TRACK_TAG**  
+  Color track. Used by lights to animate color or intensity changes.
+
+- **0xB027 -- HOT_TRACK_TAG**  
+  Spotlight hotspot track. Animates the inner cone angle of spotlights.
+
+- **0xB028 -- FALL_TRACK_TAG**  
+  Spotlight falloff track. Animates the outer cone angle of spotlights.
+
 - **0xB030 -- NODE_ID**  
   Unique ID of the node (u16).
-
----
-
-## Viewport / Display
-
-- **0x7001 -- VIEWPORT_LAYOUT**  
-  Viewport layout preferences.
-
-- **0x7011 -- VIEWPORT_DATA**  
-  General viewport settings.
-
-- **0x7012 -- VIEWPORT_DATA_3**  
-  Alternate form of viewport parameters.
-
-- **0x7020 -- MESH_DISPLAY**  
-  Mesh display preferences such as visibility toggles.
-
----
-
-## Color / Percent
-
-- **0x0010 -- COLOR_FLOAT**  
-  Color defined as floating-point triplet.
-
-- **0x0011 -- COLOR_24**  
-  Color defined as three 8-bit integers (0–255).
-
-- **0x0013 -- LIN_COLOR_24F**  
-  Linear RGB color values as floats.
-
-- **0x0030 -- PERCENT_I**  
-  Percentage stored as unsigned 16-bit integer (0–100).
-
-- **0x0031 -- PERCENT_F**  
-  Percentage stored as float (0–1).
 
 ---
 
@@ -267,5 +253,51 @@ This document expands the meaning of all known chunk IDs from the
 - **0x0008 -- VENDOR_CONTAINER**  
   A vendor-specific container. Typically used by exporters to store proprietary data.
 
+- **0x2426 -- VENDOR_2426**  
+  Vendor-specific chunk. Purpose unknown, not part of standard 3DS/I3D specs.
+
+- **0x948D -- VENDOR_948D**  
+  Vendor-specific chunk. Purpose unknown, not part of standard 3DS/I3D specs.
+
+- **0x9F59 -- VENDOR_9F59**  
+  Vendor-specific chunk. Purpose unknown, not part of standard 3DS/I3D specs.
+
 - **0xFFFF -- VENDOR_CONTAINER_END**  
   Marks the end of a vendor container.
+
+
+------------------------------------------------------------------------
+
+## Vendor / Non-Standard Extensions
+
+These IDs have been observed in I3D files but are not documented in the
+classic 3DS specification. They appear in Illusion Softworks codebases
+(`C_chunk.h`, `I3Dimp.cpp`) or through reverse engineering.
+
+- **0x4200 -- FACE_MAP_CHANNEL**  
+Illusion Softworks extension to support multiple UV mapping channels.  
+Each channel stores per-face mapping coordinates.
+
+- **0x2426 -- VENDOR_2426**  
+Non-standard / vendor-specific. Purpose unknown.
+
+- **0x948D -- VENDOR_948D**  
+Non-standard / vendor-specific. Purpose unknown.
+
+- **0x9F59 -- VENDOR_9F59**  
+Non-standard / vendor-specific. Purpose unknown.
+
+- **0xB023 -- VENDOR_B023**  
+Appears in some I3D files, not in standard 3DS docs.
+
+- **0xB024 -- VENDOR_B024**  
+Appears in some I3D files, not in standard 3DS docs.
+
+- **0xB025 -- VENDOR_B025**  
+Appears in some I3D files, not in standard 3DS docs.
+
+- **0xB027 -- VENDOR_B027**  
+Appears in some I3D files, not in standard 3DS docs.
+
+- **0xB028 -- VENDOR_B028**  
+Appears in some I3D files, not in standard 3DS docs.
