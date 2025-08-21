@@ -14,12 +14,13 @@ The I3D format is derived from the **Autodesk 3D Studio `.3ds` format**, but ext
 - ✅ Fetch textmaps: **Successful with door.i3d**
 - ✅ Proof-of-concept: I3D → OBJ - **Successful with domek.i3d**
 - ✅ Roundtrip: I3D → OBJ → I3D - **Successful with door.i3d**
-- ❌ Ingame testing of theoretical success
 
 ### Phase 2
 - ✅ Convert I3D to 3DS - **Verified with multiple meshes**
 - ❌ Convert 3DS to I3D
 - ❌ Animation/keyframe decoding
+
+### Phase 3
 - ❌ Ingame testing of theoretical success
 
 ---
