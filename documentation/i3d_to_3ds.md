@@ -3,46 +3,45 @@
 📂 [Download Script](../tools/i3d_to_3ds.py)
 
 ## Overview
-The `i3d_to_3ds.py` script converts **Illusion Softworks I3D model files** into the **Autodesk 3DS format**.  
+The `i3d_to_3ds.py` script converts **Illusion Softworks I3D models** into the classic **Autodesk 3DS** format.  
 
-It preserves meshes, UVs, materials, and keyframer data so assets can be imported into **3ds Max**, **Blender**, or other 3DS-capable tools.
+It is designed for compatibility with **3D Studio Max** and similar tools, expanding I3D’s extended UV format (`0x4200 FACE_MAP_CHANNEL`) into standard `0x4140 OBJECT_UV` arrays required by 3DS.  
 
 ---
 
 ## Features
-- **Mesh export** – converts all `0x4000 OBJECT` blocks into 3DS mesh chunks  
-- **UV mapping** – reads `0x4200 FACE_MAP_CHANNEL` and outputs standard 3DS UVs  
-- **Materials** – converts I3D material chunks into 3DS `MAT_*`, linking textures by filename  
-- **Animation support** – preserves keyframer data (`0xB000` chunks)  
-- **Transform options** –  
-  - Default: keeps `0x4160 OBJECT_TRANS_MATRIX` for **3ds Max compatibility**  
-  - `--bake-xform`: multiplies transforms into vertices and omits the matrix (safer for Blender and other tools that double-apply transforms)  
+- **Mesh export** – vertices and faces written as proper 3DS `POINT_ARRAY` + `OBJECT_FACES`  
+- **UV mapping** – always expands seams from I3D `0x4200 FACE_MAP_CHANNEL` so `len(POINT_ARRAY) == len(OBJECT_UV)` as expected by 3DS  
+- **Material support** – exports `MATERIAL` blocks with diffuse color and texture maps (`MAT_MAP_FILEPATH`)  
+- **Transform handling** – preserves `OBJECT_TRANS_MATRIX` (0x4160), with option to bake into vertex positions  
+- **Smoothing groups** – retains `OBJECT_SMOOTH` masks when present  
+- **Keyframer data** – copies `0xB000 KFDATA` blobs directly for animation compatibility  
 
 ---
 
 ## Usage
 ### Basic Conversion
 ```bash
-python i3d_to_3ds.py domek.i3d -o domek.3ds
+python i3d_to_3ds.py domek.i3d
 ```
-Outputs `domek.3ds` in the same directory. Textures should be present alongside the `.i3d` or in the working directory.
+Produces `domek.3ds` in the same directory.
 
-### With Transform Baking
+### With Output Path
 ```bash
-python i3d_to_3ds.py die_0.i3d -o die_0_baked.3ds --bake-xform
+python i3d_to_3ds.py domek.i3d -o models/domek_fixed.3ds
 ```
-Applies all object transforms directly to vertex positions, omitting transform matrices.
+Writes the converted model to a custom location.
 
-### With Specific UV Channel
+### Bake Transforms
 ```bash
-python i3d_to_3ds.py die_0.i3d -o die_0.3ds --channel 2
+python i3d_to_3ds.py domek.i3d --bake-xform
 ```
-Exports UVs from FACE_MAP_CHANNEL index 2 instead of channel 1.
+Applies `OBJECT_TRANS_MATRIX` directly into vertex coordinates, removing transform blocks for compatibility.
 
 ---
 
 ## Limitations
-- Expects textures to be available on disk, matching the filenames in the I3D  
-- Only single mesh hierarchy is supported (lights/cameras skipped)  
-- Keyframe data is preserved but not interpreted  
-- 3DS format limit: 65,535 vertices per mesh  
+- Only **one UV channel** is written (expanded from channel 1, or first available)  
+- Materials assume external texture files are available on disk  
+- Animation (`KFDATA`) is preserved but not interpreted  
+- Does **not** re-emit Illusion’s `0x4200` chunks (they are converted)  
