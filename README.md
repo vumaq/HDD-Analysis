@@ -14,14 +14,16 @@ The I3D format is derived from the **Autodesk 3D Studio `.3ds` format**, but ext
 - ✅ Fetch textmaps: **Successful with door.i3d**
 - ✅ Proof-of-concept: I3D → OBJ - **Successful with domek.i3d**
 - ✅ Roundtrip: I3D → OBJ → I3D - **Successful with door.i3d**
-- ❌ Ingame testing of theoretical success
 
 ### Phase 2
-- ❌ Convert I3D to 3DS
+- ✅ Convert I3D to 3DS - **Verified with multiple meshes**
 - ❌ Convert 3DS to I3D
-- ❌ Animation/keyframe decoding
+
+### Phase 3
 - ❌ Ingame testing of theoretical success
 
+### Phase 4
+- ❌ Blender 3DS import fix - Animation/keyframe decoding
 ---
 
 ## Tools
@@ -62,7 +64,28 @@ python i3d_to_obj.py domek.i3d --bake
 
 ---
 
-### 3. I3D Texture Map Collector
+### 3. I3D → 3DS Converter
+
+📄 [Documentation](documentation/i3d_to_3ds.md)  
+⚙️ [Download Script](tools/i3d_to_3ds.py)
+
+Converts `.i3d` models into **Autodesk 3DS** format for compatibility with 3D Studio Max and other tools. Expands I3D’s `0x4200 FACE_MAP_CHANNEL` UV data into standard `0x4140 OBJECT_UV` arrays.
+
+**Usage:**
+```bash
+# Basic conversion
+python i3d_to_3ds.py domek.i3d
+
+# Custom output path
+python i3d_to_3ds.py domek.i3d -o models/domek_fixed.3ds
+
+# Bake object transforms into vertices
+python i3d_to_3ds.py domek.i3d --bake-xform
+```
+
+---
+
+### 4. I3D Texture Map Collector
 
 📄 [Documentation](documentation/i3d_texture_map_collector.md)  
 ⚙️ [Download Script](tools/i3d_texture_map_collector.py)
@@ -78,7 +101,7 @@ On first run, generates a config file (`i3d_textures.config.json`) with `search_
 
 ---
 
-### 4. OBJ → I3D Converter
+### 5. OBJ → I3D Converter
 
 📄 [Documentation](documentation/obj_to_i3d.md)  
 ⚙️ [Download Script](tools/obj_to_i3d.py)
@@ -104,4 +127,4 @@ python obj_to_i3d.py cube.obj --no-flip-v
 
 ## License
 
-MIT License — free to use, modify, and share.
+MIT License — free to use, modify, and share.  
