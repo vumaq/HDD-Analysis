@@ -16,7 +16,7 @@ The I3D format is derived from the **Autodesk 3D Studio `.3ds` format**, but ext
 - ✅ Roundtrip: I3D → OBJ → I3D - **Successful with door.i3d**
 
 ### Phase 2
-- ✅ Convert I3D to 3DS - **Verified with multiple meshes**
+- ❌ Convert I3D to 3DS - **Verified with multiple meshes** Except Scenes
 - ❌ Convert 3DS to I3D
 
 ### Phase 3
