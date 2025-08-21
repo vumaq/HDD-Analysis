@@ -1,20 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-i3d_to_3ds.py — I3D → 3DS with FMC UV split + Materials/Textures for 3ds Max
-----------------------------------------------------------------------------
-- Properly converts I3D FACE_MAP_CHANNEL (0x4200) into classic 3DS 0x4140 UVs
-  by duplicating vertices at UV seams.
-- Writes MATERIAL blocks (AFFF) with MAT_TEXMAP/A300 so textures show in Max.
-- Links faces to materials via OBJECT_MATERIAL (0x4130) under OBJECT_FACES.
-- Optional baking of OBJECT_TRANS_MATRIX (0x4160).
+i3d_to_3ds.py — I3D → 3DS with correct UVs for 3ds Max
+-----------------------------------------------------
+- Parses I3D (3DS-derived) including Illusion's FACE_MAP_CHANNEL (0x4200).
+- ALWAYS expands vertices at UV seams so standard 3DS expects:
+    len(POINT_ARRAY) == len(OBJECT_UV) and 0x4140 exists.
+- Emits OBJECT_UV (0x4140) before OBJECT_FACES (0x4120).
+- Does NOT emit 0x4200 in the .3ds output.
 
 Usage:
-    python i3d_to_3ds.py input.i3d -o output.3ds [--channel 1] [--bake-xform]
+    python i3d_to_3ds.py input.i3d -o output.3ds [--bake-xform]
 
 Notes:
-- Texture paths written as-is from the I3D (often just basenames). Ensure Max
-  can find them (place textures next to the .3ds or add folder to Max paths).
+- Materials: emits MAT_TEXMAP/A300 when available and links faces via 0x4130.
+- COLOR chunks conform to spec (MAT_DIFFUSE contains COLOR_24).
 """
 
 import sys
@@ -23,18 +23,18 @@ import argparse
 from pathlib import Path
 from typing import List, Tuple, Dict, Optional
 
-# ---------- 3DS / I3D chunk IDs (subset) ----------
+# ---------- Chunk IDs ----------
 PRIMARY                 = 0x4D4D
 M3D_VERSION             = 0x0002
 
 OBJECTINFO              = 0x3D3D
-EDIT_CONFIG             = 0x3D3E
 
 MATERIAL                = 0xAFFF
 MAT_NAME                = 0xA000
 MAT_TEXMAP              = 0xA200
 MAT_MAP_FILEPATH        = 0xA300
-MAT_DIFFUSE             = 0xA020  # (optional small gray to avoid pure white if texture missing)
+MAT_DIFFUSE             = 0xA020
+COLOR_24                = 0x0011
 
 OBJECT                  = 0x4000
 OBJECT_MESH             = 0x4100
@@ -45,10 +45,9 @@ OBJECT_UV               = 0x4140
 OBJECT_SMOOTH           = 0x4150
 OBJECT_TRANS_MATRIX     = 0x4160
 
-# Illusion Softworks extension
-FACE_MAP_CHANNEL        = 0x4200  # FMC
+# Illusion extension in I3D
+FACE_MAP_CHANNEL        = 0x4200  # input only
 
-# Keyframer (pass-through raw)
 KFDATA                  = 0xB000
 
 # ---------- Helpers ----------
@@ -76,40 +75,40 @@ def maybe_nested(f, region_end) -> bool:
     if region_end - pos < 6:
         return False
     peek = f.read(6); f.seek(pos)
-    if len(peek) < 6: return False
+    if len(peek) < 6:
+        return False
     _cid, ln = struct.unpack("<HI", peek)
     return ln >= 6 and pos + ln <= region_end
 
-# ---------- Data containers ----------
+# ---------- Data ----------
 class Mesh:
     def __init__(self, name: str):
         self.name = name
         self.vertices: List[Tuple[float,float,float]] = []
         self.faces: List[Tuple[int,int,int]] = []
-        self.face_flags: List[int] = []           # optional (u16), same length as faces
-        self.smooth_masks: List[int] = []         # optional (u32), same length as faces
-        self.trans_matrix: Optional[bytes] = None # raw 12 * float
+        self.face_flags: List[int] = []
+        self.smooth_masks: List[int] = []
+        self.trans_matrix: Optional[bytes] = None
         self.uv_primary: List[Tuple[float,float]] = []  # 0x4140 if present
-        # FMC (channel -> dict(uvs=[(u,v)], uvfaces=[(ua,ub,uc)]))
+        # FMC: channel -> {'uvs': [(u,v)...], 'uvfaces': [(ua,ub,uc)...]}
         self.fmc_channels: Dict[int, Dict[str, list]] = {}
         # material assignment: name -> list of face indices
         self.mat_faces: Dict[str, List[int]] = {}
 
 class Doc:
     def __init__(self):
-        self.materials: Dict[str, Dict[str, Optional[str]]] = {}  # name -> {'filepath': str|None}
+        self.materials: Dict[str, Dict[str, Optional[str]]] = {}
         self.meshes: List[Mesh] = []
         self.kfdata_blobs: List[bytes] = []
 
-# ---------- I3D parse ----------
-def parse_i3d(path: Path) -> 'Doc':
+# ---------- Parse I3D ----------
+def parse_i3d(path: Path) -> Doc:
     doc = Doc()
     with path.open("rb") as f:
         cid_ln = read_chunk(f)
         if not cid_ln or cid_ln[0] != PRIMARY:
             raise ValueError("Not a 3DS/I3D file (missing PRIMARY).")
         prim_end = f.tell() - 6 + cid_ln[1]
-
         while f.tell() < prim_end:
             at = f.tell()
             ch = read_chunk(f)
@@ -121,16 +120,12 @@ def parse_i3d(path: Path) -> 'Doc':
             elif cid == OBJECTINFO:
                 parse_objectinfo(f, cend, doc)
             elif cid == KFDATA:
-                # preserve raw KFDATA chunk
-                f.seek(at)
-                blob = f.read(ln)
-                doc.kfdata_blobs.append(blob)
-                f.seek(cend)
+                f.seek(at); blob = f.read(ln); doc.kfdata_blobs.append(blob); f.seek(cend)
             else:
                 f.seek(cend)
     return doc
 
-def parse_objectinfo(f, endpos: int, doc: 'Doc'):
+def parse_objectinfo(f, endpos: int, doc: Doc):
     while f.tell() < endpos:
         at = f.tell()
         ch = read_chunk(f)
@@ -147,7 +142,7 @@ def parse_objectinfo(f, endpos: int, doc: 'Doc'):
         else:
             f.seek(cend)
 
-def parse_material(f, endpos: int, doc: 'Doc'):
+def parse_material(f, endpos: int, doc: Doc):
     name = None
     filepath = None
     while f.tell() < endpos:
@@ -159,7 +154,6 @@ def parse_material(f, endpos: int, doc: 'Doc'):
         if cid == MAT_NAME:
             name = read_cstr(f)
         elif cid == MAT_TEXMAP:
-            # scan for MAT_MAP_FILEPATH
             while f.tell() < cend:
                 sat = f.tell()
                 sub = read_chunk(f)
@@ -174,7 +168,7 @@ def parse_material(f, endpos: int, doc: 'Doc'):
     if name:
         doc.materials[name] = {"filepath": filepath}
 
-def parse_object(f, endpos: int, mesh: 'Mesh'):
+def parse_object(f, endpos: int, mesh: Mesh):
     while f.tell() < endpos:
         at = f.tell()
         ch = read_chunk(f)
@@ -186,7 +180,7 @@ def parse_object(f, endpos: int, mesh: 'Mesh'):
         else:
             f.seek(cend)
 
-def parse_object_mesh(f, endpos: int, mesh: 'Mesh'):
+def parse_object_mesh(f, endpos: int, mesh: Mesh):
     while f.tell() < endpos:
         at = f.tell()
         ch = read_chunk(f)
@@ -204,7 +198,6 @@ def parse_object_mesh(f, endpos: int, mesh: 'Mesh'):
                 a,b,c,flag = struct.unpack("<HHHH", f.read(8))
                 mesh.faces.append((a,b,c))
                 mesh.face_flags.append(flag)
-            # scan subchunks (smoothing, material assignment)
             while f.tell() < cend:
                 sat = f.tell()
                 sub = read_chunk(f)
@@ -225,16 +218,15 @@ def parse_object_mesh(f, endpos: int, mesh: 'Mesh'):
             n = struct.unpack("<H", f.read(2))[0]
             mesh.uv_primary = [struct.unpack("<ff", f.read(8)) for _ in range(n)]
         elif cid == OBJECT_TRANS_MATRIX:
-            mesh.trans_matrix = f.read(48)  # 12 floats
+            mesh.trans_matrix = f.read(48)
         elif cid == FACE_MAP_CHANNEL:
             parse_fmc(f, cend, mesh)
         else:
             f.seek(cend)
 
-
-def parse_fmc(f, endpos: int, mesh: 'Mesh'):
+def parse_fmc(f, endpos: int, mesh: Mesh):
     """
-    Expected layout per spec:
+    Layout (per spec):
         int32  channel
         uint16 uv_count
         (float u, float v) * uv_count
@@ -242,20 +234,17 @@ def parse_fmc(f, endpos: int, mesh: 'Mesh'):
         (uint16 ua, uint16 ub, uint16 uc) * face_count
     """
     try:
-        channel = struct.unpack("<i", f.read(4))[0]   # int32
-        uv_count = struct.unpack("<H", f.read(2))[0]  # u16
+        channel = struct.unpack("<i", f.read(4))[0]
+        uv_count = struct.unpack("<H", f.read(2))[0]
         uvs = [struct.unpack("<ff", f.read(8)) for _ in range(uv_count)]
-        face_count = struct.unpack("<H", f.read(2))[0]  # u16
+        face_count = struct.unpack("<H", f.read(2))[0]
         uvfaces = [struct.unpack("<HHH", f.read(6)) for _ in range(face_count)]
         mesh.fmc_channels[channel] = {"uvs": uvs, "uvfaces": uvfaces}
     except Exception:
-        # ignore malformed FMC to avoid breaking the parse
         pass
-    # fast-forward any nested (defensive)
     f.seek(endpos)
 
-
-# ---------- Math / transforms ----------
+# ---------- Math ----------
 def apply_matrix_to_vertices(vertices: List[Tuple[float,float,float]], m: bytes) -> List[Tuple[float,float,float]]:
     vals = list(struct.unpack("<12f", m))
     M = [vals[0:4], vals[4:8], vals[8:12]]
@@ -267,43 +256,60 @@ def apply_matrix_to_vertices(vertices: List[Tuple[float,float,float]], m: bytes)
         out.append((X,Y,Z))
     return out
 
-# ---------- FMC-aware rebuild ----------
-def rebuild_with_fmc(mesh: 'Mesh', channel: int):
-    data = mesh.fmc_channels.get(channel)
-    if not data:
-        return mesh.vertices, (mesh.uv_primary or []), mesh.faces
+# ---------- Rebuild (ALWAYS expand at UV seams) ----------
+def expand_vertices_with_fmc(mesh: Mesh) -> Tuple[List[Tuple[float,float,float]], List[Tuple[float,float]], List[Tuple[int,int,int]]]:
+    """
+    Build vertex+uv arrays so len(verts_out) == len(uvs_out) and faces index verts_out.
+    Prefers FMC channel 1 if present; otherwise any channel; otherwise falls back to existing 0x4140.
+    """
+    # Choose FMC channel (prefer 1)
+    channel = None
+    if mesh.fmc_channels:
+        channel = 1 if 1 in mesh.fmc_channels else sorted(mesh.fmc_channels.keys())[0]
 
-    uvs = data["uvs"]
-    uvfaces = data["uvfaces"]
-    if len(uvfaces) != len(mesh.faces):
-        return mesh.vertices, (mesh.uv_primary or []), mesh.faces
+    if channel is not None:
+        data = mesh.fmc_channels[channel]
+        uvs = data["uvs"]
+        uvfaces = data["uvfaces"]
+        if len(uvfaces) != len(mesh.faces):
+            # malformed: fall back
+            return mesh.vertices, (mesh.uv_primary or []), mesh.faces
 
-    key2idx: Dict[Tuple[int,int], int] = {}
-    new_vtx: List[Tuple[float,float,float]] = []
-    new_uvs: List[Tuple[float,float]] = []
-    new_faces: List[Tuple[int,int,int]] = []
+        key2idx: Dict[Tuple[int,int], int] = {}
+        new_vtx: List[Tuple[float,float,float]] = []
+        new_uvs: List[Tuple[float,float]] = []
+        new_faces: List[Tuple[int,int,int]] = []
 
-    def ensure_idx(pos_idx: int, uv_idx: int) -> int:
-        k = (pos_idx, uv_idx)
-        idx = key2idx.get(k)
-        if idx is not None:
+        def ensure_idx(pos_idx: int, uv_idx: int) -> int:
+            k = (pos_idx, uv_idx)
+            idx = key2idx.get(k)
+            if idx is not None:
+                return idx
+            vx, vy, vz = mesh.vertices[pos_idx] if 0 <= pos_idx < len(mesh.vertices) else (0.0,0.0,0.0)
+            u, v = uvs[uv_idx] if 0 <= uv_idx < len(uvs) else (0.0, 0.0)
+            idx = len(new_vtx)
+            new_vtx.append((vx,vy,vz))
+            new_uvs.append((u,v))
+            key2idx[k] = idx
             return idx
-        vx, vy, vz = mesh.vertices[pos_idx] if 0 <= pos_idx < len(mesh.vertices) else (0.0,0.0,0.0)
-        u, v = uvs[uv_idx] if 0 <= uv_idx < len(uvs) else (0.0, 0.0)
-        idx = len(new_vtx)
-        new_vtx.append((vx,vy,vz))
-        new_uvs.append((u,v))
-        key2idx[k] = idx
-        return idx
 
-    for fi, (a,b,c) in enumerate(mesh.faces):
-        ua, ub, uc = uvfaces[fi]
-        A = ensure_idx(a, ua); B = ensure_idx(b, ub); C = ensure_idx(c, uc)
-        new_faces.append((A,B,C))
+        for fi, (a,b,c) in enumerate(mesh.faces):
+            ua, ub, uc = uvfaces[fi]
+            A = ensure_idx(a, ua)
+            B = ensure_idx(b, ub)
+            C = ensure_idx(c, uc)
+            new_faces.append((A,B,C))
 
-    return new_vtx, new_uvs, new_faces
+        return new_vtx, new_uvs, new_faces
 
-# ---------- Emit helpers ----------
+    # No FMC: if primary UVs match vertices, use them; else warn/fallback
+    if mesh.uv_primary and len(mesh.uv_primary) == len(mesh.vertices):
+        return mesh.vertices, mesh.uv_primary, mesh.faces
+
+    # Fallback: no valid UV source
+    return mesh.vertices, [], mesh.faces
+
+# ---------- Emit ----------
 class ChunkBuilder:
     def __init__(self, cid: int):
         self.cid = cid
@@ -323,25 +329,10 @@ def emit_cstr(s: str) -> bytes:
 def emit_material(name: str, meta: Dict[str, Optional[str]]) -> bytes:
     cb = ChunkBuilder(MATERIAL)
     cb.add_chunk(MAT_NAME, emit_cstr(name))
-
-    # --- MAT_DIFFUSE must contain a nested COLOR chunk per 3DS spec ---
-    # We'll emit COLOR_24 (0x0011) = 3 bytes (RGB 0..255).
-    COLOR_24 = 0x0011
-    def color24(r, g, b):
-        # clamp to [0,255]
-        rr = max(0, min(255, int(r)))
-        gg = max(0, min(255, int(g)))
-        bb = max(0, min(255, int(b)))
-        body = bytes((rr, gg, bb))
-        # wrap as a chunk
-        return struct.pack("<HI", COLOR_24, 6 + len(body)) + body
-
-    # Use a neutral grey so material isn't pure white if texture is missing.
-    # (3ds Max sometimes dislikes COLOR_F; COLOR_24 is widely supported.)
-    diffuse_body = color24(180, 180, 180)
-    cb.add(struct.pack("<HI", MAT_DIFFUSE, 6 + len(diffuse_body)) + diffuse_body)
-
-    # Texture map (if available)
+    # MAT_DIFFUSE with nested COLOR_24
+    body = bytes((180,180,180))
+    color_chunk = struct.pack("<HI", COLOR_24, 6 + len(body)) + body
+    cb.add(struct.pack("<HI", MAT_DIFFUSE, 6 + len(color_chunk)) + color_chunk)
     fp = meta.get("filepath") if meta else None
     if fp:
         tm = ChunkBuilder(MAT_TEXMAP)
@@ -363,16 +354,13 @@ def emit_object_faces(faces: List[Tuple[int,int,int]], face_flags: Optional[List
         out.append(struct.pack("<HHHH", a, b, c, fl))
     body = b"".join(out)
 
-    # smoothing masks as subchunk if present
     if smooth_masks and len(smooth_masks) == len(faces):
         scb = ChunkBuilder(OBJECT_SMOOTH)
         scb.add(struct.pack("<" + "I"*len(faces), *smooth_masks))
         body += scb.finalize()
 
-    # material assignment subchunks
     for mname, idxs in (mat_faces or {}).items():
-        if not idxs:
-            continue
+        if not idxs: continue
         mcb = ChunkBuilder(OBJECT_MATERIAL)
         mcb.add(emit_cstr(mname))
         mcb.add(struct.pack("<H", len(idxs)))
@@ -382,63 +370,50 @@ def emit_object_faces(faces: List[Tuple[int,int,int]], face_flags: Optional[List
     cb.add(body)
     return cb.finalize()
 
-def emit_object_uv(uvs: List[Tuple[float,float]], expected_count: int, flip_v: bool=False) -> bytes:
-    # ensure 1:1 with verts
-    if len(uvs) != expected_count:
-        if len(uvs) < expected_count:
-            uvs = list(uvs) + [(0.0,0.0)]*(expected_count - len(uvs))
-        else:
-            uvs = list(uvs[:expected_count])
+def emit_object_uv(uvs: List[Tuple[float,float]], expected_count: int) -> bytes:
+    assert len(uvs) == expected_count, f"UV count {len(uvs)} must match vertex count {expected_count}"
     out = [struct.pack("<H", len(uvs))]
     for u,v in uvs:
-        if flip_v:
-            v = 1.0 - float(v)
         out.append(struct.pack("<ff", float(u), float(v)))
     return b"".join(out)
 
-def emit_object(mesh: 'Mesh', prefer_channel: int = 1, bake_xform: bool = False, flip_v_4140: bool = False) -> bytes:
+def emit_object(mesh: Mesh, bake_xform: bool = False) -> bytes:
     name = mesh.name or "Object"
     cb = ChunkBuilder(OBJECT)
     cb.add(emit_cstr(name))
 
-    # Resolve verts/faces/uvs with FMC split
-    verts = mesh.vertices
-    faces = mesh.faces
-    if mesh.fmc_channels.get(prefer_channel):
-        verts, uvs, faces = rebuild_with_fmc(mesh, prefer_channel)
-    else:
-        uvs = mesh.uv_primary or []
+    # ALWAYS expand using FMC when available
+    verts, uvs, faces = expand_vertices_with_fmc(mesh)
 
-    # Bake transform if requested
     if bake_xform and mesh.trans_matrix:
         verts = apply_matrix_to_vertices(verts, mesh.trans_matrix)
 
-    # Emit mesh block
     mb = ChunkBuilder(OBJECT_MESH)
+    # Emit in compatible order: POINT_ARRAY -> OBJECT_UV -> OBJECT_FACES -> MATRIX
     mb.add_chunk(POINT_ARRAY, emit_point_array(verts))
     if uvs:
-        mb.add_chunk(OBJECT_UV, emit_object_uv(uvs, expected_count=len(verts), flip_v=flip_v_4140))
+        mb.add_chunk(OBJECT_UV, emit_object_uv(uvs, expected_count=len(verts)))
+    else:
+        # still emit empty? safer to omit if none
+        pass
     mb.add(emit_object_faces(faces, mesh.face_flags, mesh.smooth_masks, mesh.mat_faces))
     if (not bake_xform) and mesh.trans_matrix:
         mb.add_chunk(OBJECT_TRANS_MATRIX, mesh.trans_matrix)
 
     cb.add(mb.finalize())
-
     return cb.finalize()
 
-def compose_3ds(doc: 'Doc', prefer_channel: int = 1, bake_xform: bool = False, flip_v_4140: bool = False) -> bytes:
+def compose_3ds(doc: Doc, bake_xform: bool = False) -> bytes:
     root = ChunkBuilder(PRIMARY)
-    # Version 3 (matches H&D I3D examples)
     root.add_chunk(M3D_VERSION, struct.pack("<I", 3))
 
-    # OBJECTINFO container
     edit = ChunkBuilder(OBJECTINFO)
 
     # Materials
     for mname, meta in doc.materials.items():
         edit.add(emit_material(mname, meta))
 
-    # Ensure materials referenced by meshes exist (create empty if missing)
+    # Ensure materials referenced exist
     for mesh in doc.meshes:
         for mname in mesh.mat_faces.keys():
             if mname and mname not in doc.materials:
@@ -447,11 +422,10 @@ def compose_3ds(doc: 'Doc', prefer_channel: int = 1, bake_xform: bool = False, f
 
     # Objects
     for mesh in doc.meshes:
-        edit.add(emit_object(mesh, prefer_channel=prefer_channel, bake_xform=bake_xform, flip_v_4140=flip_v_4140))
+        edit.add(emit_object(mesh, bake_xform=bake_xform))
 
     root.add(edit.finalize())
 
-    # Append raw KFDATA blocks if any
     for blob in doc.kfdata_blobs:
         root.add(blob)
 
@@ -459,12 +433,10 @@ def compose_3ds(doc: 'Doc', prefer_channel: int = 1, bake_xform: bool = False, f
 
 # ---------- CLI ----------
 def main():
-    ap = argparse.ArgumentParser(description="I3D → 3DS converter with FMC UV splitting and 3ds Max-friendly materials.")
+    ap = argparse.ArgumentParser(description="I3D → 3DS converter with correct 0x4140 UVs (vertex-expanded from 0x4200).")
     ap.add_argument("i3d_file", help="Path to input .i3d")
     ap.add_argument("-o", "--output", help="Path to output .3ds (default: alongside input)")
-    ap.add_argument("--channel", type=int, default=1, help="FACE_MAP_CHANNEL index to use (default: 1)")
     ap.add_argument("--bake-xform", action="store_true", help="Bake OBJECT_TRANS_MATRIX (0x4160) into vertices")
-    ap.add_argument("--flip-v-4140", action="store_true", help="Flip V in emitted 0x4140 (v = 1 - v). Default OFF.")
     args = ap.parse_args()
 
     in_path = Path(args.i3d_file)
@@ -476,15 +448,13 @@ def main():
 
     print(f"[I3D] Loading: {in_path}")
     doc = parse_i3d(in_path)
-    print(f"[I3D] Meshes: {len(doc.meshes)} | Materials: {len(doc.materials)} | KFDATA blobs: {len(doc.kfdata_blobs)}")
+    print(f"[I3D] Meshes: {len(doc.meshes)} | Materials: {len(doc.materials)} | KFDATA: {len(doc.kfdata_blobs)}")
 
-    blob = compose_3ds(doc, prefer_channel=args.channel, bake_xform=args.bake_xform, flip_v_4140=args.flip_v_4140)
+    blob = compose_3ds(doc, bake_xform=args.bake_xform)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_bytes(blob)
     print(f"[OK ] Wrote: {out_path.resolve()} ({len(blob)} bytes)")
-    if args.bake_xform:
-        print("[INFO] Transforms baked; 0x4160 omitted on meshes that had it.")
 
 if __name__ == "__main__":
     main()
