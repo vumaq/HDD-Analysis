@@ -229,13 +229,21 @@ CID_REG = {
     0x7011: {"name": "VIEWPORT_DATA", "strategy": "flat"},
     0x7012: {"name": "VIEWPORT_DATA_3", "strategy": "flat"},
     0x7020: {"name": "MESH_DISPLAY", "strategy": "flat"},
-    0x2426: {"name": "VENDOR_2426", "strategy": "container"},  # non-standard / vendor-specific
-    0x948D: {"name": "VENDOR_948D", "strategy": "container"},  # non-standard / vendor-specific
-    0x9F59: {"name": "VENDOR_9F59", "strategy": "container"},  # non-standard / vendor-specific
 }
 
 # Add helper/color/percent and KF ids so they aren't UNKNOWN
 CID_REG.update({
+    0x7000: {"name": "VIEWPORT", "strategy": "flat"},
+    0x7010: {"name": "VIEWPORT_DATA_1", "strategy": "flat"},
+    0x7030: {"name": "VIEWPORT_UNKNOWN_7030", "strategy": "flat"},
+    0xB023: {"name": "FOV_TRACK_TAG", "strategy": "flat"},
+    0xB024: {"name": "ROLL_TRACK_TAG", "strategy": "flat"},
+    0xB025: {"name": "COL_TRACK_TAG", "strategy": "flat"},
+    0xB027: {"name": "HOT_TRACK_TAG", "strategy": "flat"},
+    0xB028: {"name": "FALL_TRACK_TAG", "strategy": "flat"},
+    0x9F59: {"name": "VENDOR_9F59", "strategy": "opaque"},
+    0x948D: {"name": "VENDOR_948D", "strategy": "opaque"},
+    0x2426: {"name": "VENDOR_2426", "strategy": "opaque"},
     0x0030: {"name": "PERCENT_I", "strategy": "flat"},
     0x0031: {"name": "PERCENT_F", "strategy": "flat"},
     0x0010: {"name": "COLOR_FLOAT", "strategy": "auto"},
@@ -797,6 +805,39 @@ def _handle_scl_track(f, ln, depth, out, *, to_idx):
 # -----------------------------
 # Viewport / Display handler (JSON-aware)
 # -----------------------------
+
+def handle_vendor_payload(ch, cid: int, ctx):
+    """
+    Minimal, non-invasive scanner for vendor chunks.
+    - Reads raw payload bytes
+    - Looks for ASCII file paths with audio-like extensions
+    - Emits a one-line summary and a bullet list (if any are found)
+    """
+    size = ch.Size()
+    try:
+        raw = bytearray(size)
+        ch.Read(raw, size)
+    except Exception as e:
+        ctx.write_line(f"\t\t<VENDOR {cid:04X} read error: {e}>")
+        ch.Descend()
+        return
+    import re as _re
+    s = bytes(raw)
+    strings = _re.findall(rb"[ -~]{4,}", s)  # 4+ printable ASCII
+    paths = []
+    for st in strings:
+        try:
+            t = st.decode("ascii", errors="ignore")
+        except:
+            continue
+        if _re.search(r"(?i)\.(wav|mp3|ogg|aif|aiff|voc|snd|sfx)\b", t):
+            paths.append(t)
+    ctx.write_line(f"\t\tVENDOR_{cid:04X} payload bytes: {size}")
+    if paths:
+        ctx.write_line(f"\t\tDetected audio paths ({len(paths)}):")
+        for pth in sorted(set(paths)):
+            ctx.write_line(f"\t\t  - {pth}")
+    ch.Descend()
 def handle_viewport_block(f, ln, depth, out, chunks, anomalies, parent_idx):
     start = f.tell() - 6
     end = start + ln
@@ -888,7 +929,10 @@ SPECIAL = {
     0xB006: handle_kf_node,
     0xB007: handle_kf_node,
 
-    # Viewport / Display (flat) — JSON-aware handler
+    # Viewport / Display (flat) — JSON-aware handler    0x2426: handle_vendor_payload,
+    0x948D: handle_vendor_payload,
+    0x9F59: handle_vendor_payload,
+
     0x7001: handle_viewport_block,
     0x7011: handle_viewport_block,
     0x7012: handle_viewport_block,
