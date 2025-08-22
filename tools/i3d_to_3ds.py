@@ -1,38 +1,40 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-i3d_to_3ds.py — I3D → 3DS (minimal, deterministic, no flags)
-------------------------------------------------------------
-- Converts I3D (Illusion/Hidden & Dangerous) back to classic .3DS.
-- Properly handles Illusion FACE_MAP_CHANNEL (0x4200) → standard OBJECT_UV (0x4140):
-    * Expands vertices at UV seams so len(POINT_ARRAY) == len(OBJECT_UV).
-    * Emits 0x4140; never writes 0x4200 to the .3ds output.
-- PRESERVES animation (KFDATA 0xB000) byte-for-byte.
-- Keeps empty objects; does NOT fabricate meshes for lights/cameras/dummies.
-- Strips vendor/unknown subchunks (e.g., 0x2426, 0x948D, 0xA220, 0xA230).
-- Robust parsing: clamps any subchunk length to its parent to avoid runaway seeks.
-- Deterministic canonical emission order: Materials → Objects → Animation.
+i3d_to_3ds.py — I3D → 3DS with FMC UV split + Materials/Textures for 3ds Max
+----------------------------------------------------------------------------
+- Properly converts I3D FACE_MAP_CHANNEL (0x4200) into classic 3DS 0x4140 UVs
+  by duplicating vertices at UV seams.
+- Writes MATERIAL blocks (AFFF) with MAT_TEXMAP/A300 so textures show in Max.
+- Links faces to materials via OBJECT_MATERIAL (0x4130) under OBJECT_FACES.
+- Optional baking of OBJECT_TRANS_MATRIX (0x4160).
 
 Usage:
-  python i3d_to_3ds.py scene-game-ready.i3d
-  # Writes scene-game-ready.3ds next to input
+    python i3d_to_3ds.py input.i3d -o output.3ds [--channel 1] [--bake-xform]
+
+Notes:
+- Texture paths written as-is from the I3D (often just basenames). Ensure Max
+  can find them (place textures next to the .3ds or add folder to Max paths).
 """
 
-from __future__ import annotations
 import sys
 import struct
+import argparse
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Tuple, Dict, Optional
 
-# ---- 3DS Chunk IDs ----
+# ---------- 3DS / I3D chunk IDs (subset) ----------
 PRIMARY                 = 0x4D4D
 M3D_VERSION             = 0x0002
+
 OBJECTINFO              = 0x3D3D
+EDIT_CONFIG             = 0x3D3E
 
 MATERIAL                = 0xAFFF
 MAT_NAME                = 0xA000
 MAT_TEXMAP              = 0xA200
 MAT_MAP_FILEPATH        = 0xA300
+MAT_DIFFUSE             = 0xA020  # (optional small gray to avoid pure white if texture missing)
 
 OBJECT                  = 0x4000
 OBJECT_MESH             = 0x4100
@@ -42,18 +44,14 @@ OBJECT_MATERIAL         = 0x4130
 OBJECT_UV               = 0x4140
 OBJECT_SMOOTH           = 0x4150
 OBJECT_TRANS_MATRIX     = 0x4160
-OBJECT_LIGHT            = 0x4600   # input only, do not fabricate meshes
-OBJECT_CAMERA           = 0x4700   # input only
 
-# Illusion extension in I3D (input only)
-FACE_MAP_CHANNEL        = 0x4200
+# Illusion Softworks extension
+FACE_MAP_CHANNEL        = 0x4200  # FMC
 
+# Keyframer (pass-through raw)
 KFDATA                  = 0xB000
 
-# Known vendor/unknown chunks to strip anywhere inside editable areas:
-VENDOR_STRIP_IDS = {0x2426, 0x948D, 0x9F59, 0xA220, 0xA230, 0xB023, 0xB024, 0xB025, 0xB027, 0xB028}
-
-# ---------- Low-level I/O ----------
+# ---------- Helpers ----------
 def read_chunk(f):
     hdr = f.read(6)
     if len(hdr) < 6:
@@ -71,105 +69,85 @@ def read_cstr(f) -> str:
     try:
         return bs.decode("ascii", errors="replace")
     except Exception:
-        return bs.decode("latin-1", errors="replace")
+        return bs.decode("latin1", errors="replace")
 
-def emit_cstr(s: str) -> bytes:
-    return s.encode("ascii", errors="replace") + b"\x00"
-
-def clamp_end(at: int, ln: int, parent_end: int) -> int:
-    """Clamp a child's computed end to its parent's end to avoid runaway seeks."""
-    cend = at + ln
-    return cend if cend <= parent_end else parent_end
-
-class ChunkBuilder:
-    def __init__(self, cid: int):
-        self.cid = cid
-        self.parts: List[bytes] = []
-    def add(self, blob: bytes):
-        self.parts.append(blob)
-    def add_chunk(self, cid: int, payload: bytes):
-        self.parts.append(struct.pack("<HI", cid, 6 + len(payload)) + payload)
-    def finalize(self) -> bytes:
-        payload = b"".join(self.parts)
-        return struct.pack("<HI", self.cid, 6 + len(payload)) + payload
+def maybe_nested(f, region_end) -> bool:
+    pos = f.tell()
+    if region_end - pos < 6:
+        return False
+    peek = f.read(6); f.seek(pos)
+    if len(peek) < 6: return False
+    _cid, ln = struct.unpack("<HI", peek)
+    return ln >= 6 and pos + ln <= region_end
 
 # ---------- Data containers ----------
 class Mesh:
     def __init__(self, name: str):
         self.name = name
-        # input-type flags
-        self.had_mesh: bool = False
-        self.had_light: bool = False
-        self.had_camera: bool = False
-
-        # mesh data
-        self.verts: List[Tuple[float,float,float]] = []
-        self.face_flags: List[int] = []
+        self.vertices: List[Tuple[float,float,float]] = []
         self.faces: List[Tuple[int,int,int]] = []
-        self.smooth_masks: List[int] = []
-        self.trans_matrix: Optional[bytes] = None
-        self.uv_primary: List[Tuple[float,float]] = []  # from 0x4140 if present
-        # FMC: channel -> {'uvs': [(u,v)...], 'uvfaces': [(ua,ub,uc)...]}
+        self.face_flags: List[int] = []           # optional (u16), same length as faces
+        self.smooth_masks: List[int] = []         # optional (u32), same length as faces
+        self.trans_matrix: Optional[bytes] = None # raw 12 * float
+        self.uv_primary: List[Tuple[float,float]] = []  # 0x4140 if present
+        # FMC (channel -> dict(uvs=[(u,v)], uvfaces=[(ua,ub,uc)]))
         self.fmc_channels: Dict[int, Dict[str, list]] = {}
         # material assignment: name -> list of face indices
         self.mat_faces: Dict[str, List[int]] = {}
 
 class Doc:
     def __init__(self):
-        self.materials: Dict[str, Dict[str, Optional[str]]] = {}
+        self.materials: Dict[str, Dict[str, Optional[str]]] = {}  # name -> {'filepath': str|None}
         self.meshes: List[Mesh] = []
-        self.kfdata_blobs: List[bytes] = []  # preserved as-is
+        self.kfdata_blobs: List[bytes] = []
 
-# ---------- Parse I3D ----------
-def parse_i3d(path: Path) -> Doc:
+# ---------- I3D parse ----------
+def parse_i3d(path: Path) -> 'Doc':
     doc = Doc()
     with path.open("rb") as f:
-        ch = read_chunk(f)
-        if not ch:
-            raise RuntimeError("Empty file")
-        cid, ln = ch
-        if cid != PRIMARY:
-            raise RuntimeError("Not a 3DS/I3D PRIMARY file")
-        file_end = ln  # absolute end for PRIMARY
-        while f.tell() < file_end:
+        cid_ln = read_chunk(f)
+        if not cid_ln or cid_ln[0] != PRIMARY:
+            raise ValueError("Not a 3DS/I3D file (missing PRIMARY).")
+        prim_end = f.tell() - 6 + cid_ln[1]
+
+        while f.tell() < prim_end:
             at = f.tell()
             ch = read_chunk(f)
-            if not ch:
-                break
+            if not ch: break
             cid, ln = ch
-            cend = clamp_end(at, ln, file_end)
+            cend = at + ln
             if cid == M3D_VERSION:
-                # Some I3D files report 200 here; ignore
-                if f.tell() + 4 <= cend:
-                    _ = struct.unpack("<I", f.read(4))[0]
-                f.seek(cend)
+                _ver = struct.unpack("<I", f.read(4))[0]
             elif cid == OBJECTINFO:
                 parse_objectinfo(f, cend, doc)
             elif cid == KFDATA:
-                # Byte-exact copy-through of animation
+                # preserve raw KFDATA chunk
                 f.seek(at)
-                doc.kfdata_blobs.append(f.read(cend - at))
+                blob = f.read(ln)
+                doc.kfdata_blobs.append(blob)
+                f.seek(cend)
             else:
-                # swallow vendor/unknown roots safely
                 f.seek(cend)
     return doc
 
-def parse_objectinfo(f, endpos: int, doc: Doc):
+def parse_objectinfo(f, endpos: int, doc: 'Doc'):
     while f.tell() < endpos:
         at = f.tell()
         ch = read_chunk(f)
-        if not ch:
-            break
+        if not ch: break
         cid, ln = ch
-        cend = clamp_end(at, ln, endpos)
+        cend = at + ln
         if cid == MATERIAL:
             parse_material(f, cend, doc)
         elif cid == OBJECT:
-            parse_object(f, cend, doc)
+            name = read_cstr(f)
+            mesh = Mesh(name or "Object")
+            parse_object(f, cend, mesh)
+            doc.meshes.append(mesh)
         else:
             f.seek(cend)
 
-def parse_material(f, endpos: int, doc: Doc):
+def parse_material(f, endpos: int, doc: 'Doc'):
     name = None
     filepath = None
     while f.tell() < endpos:
@@ -177,323 +155,303 @@ def parse_material(f, endpos: int, doc: Doc):
         ch = read_chunk(f)
         if not ch: break
         cid, ln = ch
-        cend = clamp_end(at, ln, endpos)
+        cend = at + ln
         if cid == MAT_NAME:
             name = read_cstr(f)
         elif cid == MAT_TEXMAP:
+            # scan for MAT_MAP_FILEPATH
             while f.tell() < cend:
                 sat = f.tell()
                 sub = read_chunk(f)
                 if not sub: break
                 scid, sln = sub
-                send = clamp_end(sat, sln, cend)
+                send = sat + sln
                 if scid == MAT_MAP_FILEPATH:
                     filepath = read_cstr(f)
-                else:
-                    f.seek(send)
+                f.seek(send)
         else:
             f.seek(cend)
     if name:
         doc.materials[name] = {"filepath": filepath}
 
-def parse_object(f, endpos: int, doc: Doc):
-    name = read_cstr(f)
-    mesh = Mesh(name or "Object")
+def parse_object(f, endpos: int, mesh: 'Mesh'):
     while f.tell() < endpos:
         at = f.tell()
         ch = read_chunk(f)
         if not ch: break
         cid, ln = ch
-        cend = clamp_end(at, ln, endpos)
+        cend = at + ln
         if cid == OBJECT_MESH:
-            mesh.had_mesh = True
             parse_object_mesh(f, cend, mesh)
-        elif cid == OBJECT_LIGHT:
-            mesh.had_light = True
-            strip_vendor_children(f, cend)
-        elif cid == OBJECT_CAMERA:
-            mesh.had_camera = True
-            strip_vendor_children(f, cend)
         else:
             f.seek(cend)
-    doc.meshes.append(mesh)
 
-def strip_vendor_children(f, endpos: int):
-    """Skip over a LIGHT/CAMERA block, stripping known vendor children if present."""
-    while f.tell() < endpos:
-        at = f.tell()
-        ch = read_chunk(f)
-        if not ch: break
-        _scid, sln = ch
-        send = clamp_end(at, sln, endpos)
-        f.seek(send)
-
-def parse_object_mesh(f, endpos: int, mesh: Mesh):
+def parse_object_mesh(f, endpos: int, mesh: 'Mesh'):
     while f.tell() < endpos:
         at = f.tell()
         ch = read_chunk(f)
         if not ch: break
         cid, ln = ch
-        cend = clamp_end(at, ln, endpos)
-
+        cend = at + ln
         if cid == POINT_ARRAY:
-            if f.tell() + 2 <= cend:
-                n = struct.unpack("<H", f.read(2))[0]
-                verts = []
-                for _ in range(n):
-                    if f.tell() + 12 <= cend:
-                        verts.append(struct.unpack("<fff", f.read(12)))
-                    else:
-                        break
-                mesh.verts = verts
-            f.seek(cend)
-
-        elif cid == OBJECT_UV:
-            if f.tell() + 2 <= cend:
-                n = struct.unpack("<H", f.read(2))[0]
-                uvs = []
-                for _ in range(n):
-                    if f.tell() + 8 <= cend:
-                        uvs.append(struct.unpack("<ff", f.read(8)))
-                    else:
-                        break
-                mesh.uv_primary = uvs
-            f.seek(cend)
-
+            n = struct.unpack("<H", f.read(2))[0]
+            mesh.vertices = [struct.unpack("<fff", f.read(12)) for _ in range(n)]
         elif cid == OBJECT_FACES:
-            cnt = 0
-            faces = []
-            flags = []
-            if f.tell() + 2 <= cend:
-                cnt = struct.unpack("<H", f.read(2))[0]
-                for _ in range(cnt):
-                    if f.tell() + 8 <= cend:
-                        a,b,c,fl = struct.unpack("<HHHH", f.read(8))
-                        faces.append((a,b,c))
-                        flags.append(fl)
-                    else:
-                        break
-            mesh.faces = faces
-            mesh.face_flags = flags
-            # subchunks (material links, smoothing)
+            n = struct.unpack("<H", f.read(2))[0]
+            mesh.faces = []
+            mesh.face_flags = []
+            for _ in range(n):
+                a,b,c,flag = struct.unpack("<HHHH", f.read(8))
+                mesh.faces.append((a,b,c))
+                mesh.face_flags.append(flag)
+            # scan subchunks (smoothing, material assignment)
             while f.tell() < cend:
                 sat = f.tell()
                 sub = read_chunk(f)
                 if not sub: break
                 scid, sln = sub
-                send = clamp_end(sat, sln, cend)
-                if scid == OBJECT_MATERIAL:
+                send = sat + sln
+                if scid == OBJECT_SMOOTH:
+                    cnt = len(mesh.faces)
+                    mesh.smooth_masks = list(struct.unpack("<" + "I"*cnt, f.read(4*cnt)))
+                elif scid == OBJECT_MATERIAL:
                     mname = read_cstr(f)
-                    idxs = []
-                    if f.tell() + 2 <= send:
-                        cnt = struct.unpack("<H", f.read(2))[0]
-                        for _ in range(cnt):
-                            if f.tell() + 2 <= send:
-                                idxs.append(struct.unpack("<H", f.read(2))[0])
-                            else:
-                                break
+                    cnt = struct.unpack("<H", f.read(2))[0]
+                    idxs = list(struct.unpack("<" + "H"*cnt, f.read(2*cnt)))
                     mesh.mat_faces.setdefault(mname, []).extend(idxs)
-                elif scid == OBJECT_SMOOTH:
-                    # optional; align to face count
-                    masks = []
-                    while f.tell() + 4 <= send and len(masks) < len(faces):
-                        masks.append(struct.unpack("<I", f.read(4))[0])
-                    mesh.smooth_masks = masks
                 else:
                     f.seek(send)
-            f.seek(cend)
-
+        elif cid == OBJECT_UV:
+            n = struct.unpack("<H", f.read(2))[0]
+            mesh.uv_primary = [struct.unpack("<ff", f.read(8)) for _ in range(n)]
         elif cid == OBJECT_TRANS_MATRIX:
-            # 3x4 matrix (48 bytes), row-major
-            size = min(48, max(0, cend - f.tell()))
-            mesh.trans_matrix = f.read(size).ljust(48, b"\x00")
-            f.seek(cend)
-
+            mesh.trans_matrix = f.read(48)  # 12 floats
         elif cid == FACE_MAP_CHANNEL:
-            # Flat layout: <I chan><H uvCount><uvs...><optional H faceCount><HHH * faceCount | remainder/6>
-            payload_len = max(0, cend - f.tell())
-            payload = f.read(payload_len)
-            uvs = []
-            uvfaces = []
-            chan = 1
-            off = 0
-            if len(payload) >= 6:
-                chan = struct.unpack_from("<I", payload, off)[0]; off += 4
-                uv_count = struct.unpack_from("<H", payload, off)[0]; off += 2
-                # UV list
-                needed = uv_count * 8
-                if len(payload) >= off + needed:
-                    for i in range(uv_count):
-                        uvs.append(struct.unpack_from("<ff", payload, off + i*8))
-                    off += needed
-                    # Faces part (optional)
-                    rem = len(payload) - off
-                    if rem >= 2:
-                        possible_count = struct.unpack_from("<H", payload, off)[0]
-                        rem2 = rem - 2
-                        if rem2 >= 0 and rem2 % 6 == 0 and (possible_count*6 == rem2):
-                            off += 2
-                            for i in range(possible_count):
-                                uvfaces.append(struct.unpack_from("<HHH", payload, off + i*6))
-                        else:
-                            tri_count = rem // 6
-                            for i in range(tri_count):
-                                uvfaces.append(struct.unpack_from("<HHH", payload, off + i*6))
-            if uvs:
-                mesh.fmc_channels[chan] = {"uvs": uvs, "uvfaces": uvfaces}
-            # No seek needed; we consumed to cend via payload
-
+            parse_fmc(f, cend, mesh)
         else:
-            # swallow unknown/vendor subchunks inside mesh safely
             f.seek(cend)
 
-# ---------- FMC → expanded vertices ----------
-def expand_vertices_with_fmc(mesh: Mesh):
-    """
-    Return verts, uvs, faces where each (v,uv) pair is a unique vertex so that
-    len(POINT_ARRAY) == len(OBJECT_UV). If no FMC is present, fall back to
-    primary 0x4140 UVs as-is (padding/truncation to match vertex count).
-    """
-    if mesh.fmc_channels:
-        chan = 1 if 1 in mesh.fmc_channels else next(iter(mesh.fmc_channels.keys()))
-        uvs = mesh.fmc_channels[chan].get("uvs", [])
-        uvfaces = mesh.fmc_channels[chan].get("uvfaces", [])
-        # If no uvfaces provided, attempt a simple mapping fallback
-        if not uvfaces and mesh.faces and uvs:
-            uvfaces = []
-            for (a,b,c) in mesh.faces:
-                uvfaces.append((a % len(uvs), b % len(uvs), c % len(uvs)))
-        new_verts: List[Tuple[float,float,float]] = []
-        new_uvs:   List[Tuple[float,float]] = []
-        new_faces: List[Tuple[int,int,int]] = []
-        remap: Dict[Tuple[int,int], int] = {}
-        for (a,b,c), (ua,ub,uc) in zip(mesh.faces, uvfaces):
-            tri_new = []
-            for v_idx, uv_idx in ((a,ua),(b,ub),(c,uc)):
-                key = (v_idx, uv_idx)
-                if key not in remap:
-                    remap[key] = len(new_verts)
-                    v = mesh.verts[v_idx] if v_idx < len(mesh.verts) else (0.0,0.0,0.0)
-                    uv = uvs[uv_idx] if uv_idx < len(uvs) else (0.0,0.0)
-                    new_verts.append(v)
-                    new_uvs.append(uv)
-                tri_new.append(remap[key])
-            new_faces.append(tuple(tri_new))
-        if new_verts and len(new_verts) == len(new_uvs):
-            return new_verts, new_uvs, new_faces
 
-    # Fallback to primary 0x4140: ensure counts match vertices
-    verts = mesh.verts
-    uvs = list(mesh.uv_primary)
-    if verts:
-        if not uvs:
-            uvs = [(0.0, 0.0)] * len(verts)
-        elif len(uvs) < len(verts):
-            uvs += [uvs[-1]] * (len(verts) - len(uvs))
-        elif len(uvs) > len(verts):
-            uvs = uvs[:len(verts)]
-    return verts, uvs, mesh.faces
+def parse_fmc(f, endpos: int, mesh: 'Mesh'):
+    """
+    Expected layout per spec:
+        int32  channel
+        uint16 uv_count
+        (float u, float v) * uv_count
+        uint16 face_count
+        (uint16 ua, uint16 ub, uint16 uc) * face_count
+    """
+    try:
+        channel = struct.unpack("<i", f.read(4))[0]   # int32
+        uv_count = struct.unpack("<H", f.read(2))[0]  # u16
+        uvs = [struct.unpack("<ff", f.read(8)) for _ in range(uv_count)]
+        face_count = struct.unpack("<H", f.read(2))[0]  # u16
+        uvfaces = [struct.unpack("<HHH", f.read(6)) for _ in range(face_count)]
+        mesh.fmc_channels[channel] = {"uvs": uvs, "uvfaces": uvfaces}
+    except Exception:
+        # ignore malformed FMC to avoid breaking the parse
+        pass
+    # fast-forward any nested (defensive)
+    f.seek(endpos)
 
-# ---------- Emit 3DS ----------
+
+# ---------- Math / transforms ----------
+def apply_matrix_to_vertices(vertices: List[Tuple[float,float,float]], m: bytes) -> List[Tuple[float,float,float]]:
+    vals = list(struct.unpack("<12f", m))
+    M = [vals[0:4], vals[4:8], vals[8:12]]
+    out = []
+    for x,y,z in vertices:
+        X = M[0][0]*x + M[0][1]*y + M[0][2]*z + M[0][3]
+        Y = M[1][0]*x + M[1][1]*y + M[1][2]*z + M[1][3]
+        Z = M[2][0]*x + M[2][1]*y + M[2][2]*z + M[2][3]
+        out.append((X,Y,Z))
+    return out
+
+# ---------- FMC-aware rebuild ----------
+def rebuild_with_fmc(mesh: 'Mesh', channel: int):
+    data = mesh.fmc_channels.get(channel)
+    if not data:
+        return mesh.vertices, (mesh.uv_primary or []), mesh.faces
+
+    uvs = data["uvs"]
+    uvfaces = data["uvfaces"]
+    if len(uvfaces) != len(mesh.faces):
+        return mesh.vertices, (mesh.uv_primary or []), mesh.faces
+
+    key2idx: Dict[Tuple[int,int], int] = {}
+    new_vtx: List[Tuple[float,float,float]] = []
+    new_uvs: List[Tuple[float,float]] = []
+    new_faces: List[Tuple[int,int,int]] = []
+
+    def ensure_idx(pos_idx: int, uv_idx: int) -> int:
+        k = (pos_idx, uv_idx)
+        idx = key2idx.get(k)
+        if idx is not None:
+            return idx
+        vx, vy, vz = mesh.vertices[pos_idx] if 0 <= pos_idx < len(mesh.vertices) else (0.0,0.0,0.0)
+        u, v = uvs[uv_idx] if 0 <= uv_idx < len(uvs) else (0.0, 0.0)
+        idx = len(new_vtx)
+        new_vtx.append((vx,vy,vz))
+        new_uvs.append((u,v))
+        key2idx[k] = idx
+        return idx
+
+    for fi, (a,b,c) in enumerate(mesh.faces):
+        ua, ub, uc = uvfaces[fi]
+        A = ensure_idx(a, ua); B = ensure_idx(b, ub); C = ensure_idx(c, uc)
+        new_faces.append((A,B,C))
+
+    return new_vtx, new_uvs, new_faces
+
+# ---------- Emit helpers ----------
+class ChunkBuilder:
+    def __init__(self, cid: int):
+        self.cid = cid
+        self.parts: List[bytes] = []
+    def add(self, raw: bytes):
+        self.parts.append(raw)
+    def add_chunk(self, cid: int, payload: bytes):
+        ln = 6 + len(payload)
+        self.parts.append(struct.pack("<HI", cid, ln) + payload)
+    def finalize(self) -> bytes:
+        payload = b"".join(self.parts)
+        return struct.pack("<HI", self.cid, 6 + len(payload)) + payload
+
+def emit_cstr(s: str) -> bytes:
+    return s.encode("ascii", errors="replace") + b"\x00"
+
 def emit_material(name: str, meta: Dict[str, Optional[str]]) -> bytes:
     cb = ChunkBuilder(MATERIAL)
     cb.add_chunk(MAT_NAME, emit_cstr(name))
+
+    # --- MAT_DIFFUSE must contain a nested COLOR chunk per 3DS spec ---
+    # We'll emit COLOR_24 (0x0011) = 3 bytes (RGB 0..255).
+    COLOR_24 = 0x0011
+    def color24(r, g, b):
+        # clamp to [0,255]
+        rr = max(0, min(255, int(r)))
+        gg = max(0, min(255, int(g)))
+        bb = max(0, min(255, int(b)))
+        body = bytes((rr, gg, bb))
+        # wrap as a chunk
+        return struct.pack("<HI", COLOR_24, 6 + len(body)) + body
+
+    # Use a neutral grey so material isn't pure white if texture is missing.
+    # (3ds Max sometimes dislikes COLOR_F; COLOR_24 is widely supported.)
+    diffuse_body = color24(180, 180, 180)
+    cb.add(struct.pack("<HI", MAT_DIFFUSE, 6 + len(diffuse_body)) + diffuse_body)
+
+    # Texture map (if available)
     fp = meta.get("filepath") if meta else None
     if fp:
-        m = ChunkBuilder(MAT_TEXMAP)
-        m.add_chunk(MAT_MAP_FILEPATH, emit_cstr(fp))
-        cb.add(m.finalize())
+        tm = ChunkBuilder(MAT_TEXMAP)
+        tm.add_chunk(MAT_MAP_FILEPATH, emit_cstr(fp))
+        cb.add(tm.finalize())
     return cb.finalize()
 
 def emit_point_array(verts: List[Tuple[float,float,float]]) -> bytes:
     out = [struct.pack("<H", len(verts))]
-    out += [struct.pack("<fff", *v) for v in verts]
+    for x,y,z in verts:
+        out.append(struct.pack("<fff", x, y, z))
     return b"".join(out)
 
-def emit_object_faces_with_subs(faces: List[Tuple[int,int,int]], mat_faces: Dict[str, List[int]]):
-    # Build OBJECT_FACES with embedded subchunks (OBJECT_MATERIAL etc.)
-    base = [struct.pack("<H", len(faces))]
-    for (a,b,c) in faces:
-        base.append(struct.pack("<HHHH", a,b,c, 0))  # flags -> 0
-    faces_payload = b"".join(base)
+def emit_object_faces(faces: List[Tuple[int,int,int]], face_flags: Optional[List[int]], smooth_masks: Optional[List[int]], mat_faces: Dict[str, List[int]]) -> bytes:
+    cb = ChunkBuilder(OBJECT_FACES)
+    out = [struct.pack("<H", len(faces))]
+    flags = face_flags if face_flags and len(face_flags) == len(faces) else [0]*len(faces)
+    for (a,b,c), fl in zip(faces, flags):
+        out.append(struct.pack("<HHHH", a, b, c, fl))
+    body = b"".join(out)
 
-    faces_cb = ChunkBuilder(OBJECT_FACES)
-    faces_cb.add(faces_payload)
+    # smoothing masks as subchunk if present
+    if smooth_masks and len(smooth_masks) == len(faces):
+        scb = ChunkBuilder(OBJECT_SMOOTH)
+        scb.add(struct.pack("<" + "I"*len(faces), *smooth_masks))
+        body += scb.finalize()
 
-    # Embed each OBJECT_MATERIAL as a subchunk inside OBJECT_FACES
-    for mname, idxs in mat_faces.items():
+    # material assignment subchunks
+    for mname, idxs in (mat_faces or {}).items():
         if not idxs:
             continue
-        mb = [emit_cstr(mname), struct.pack("<H", len(idxs))]
-        mb += [struct.pack("<H", i) for i in idxs]
-        faces_cb.add_chunk(OBJECT_MATERIAL, b"".join(mb))
+        mcb = ChunkBuilder(OBJECT_MATERIAL)
+        mcb.add(emit_cstr(mname))
+        mcb.add(struct.pack("<H", len(idxs)))
+        mcb.add(struct.pack("<" + "H"*len(idxs), *idxs))
+        body += mcb.finalize()
 
-    return faces_cb.finalize()
+    cb.add(body)
+    return cb.finalize()
 
-def emit_object_uv(uvs: List[Tuple[float,float]], expected_count: Optional[int]=None) -> bytes:
-    if expected_count is not None:
-        if len(uvs) != expected_count:
-            # pad or truncate to match expected (safer for finicky readers)
-            if len(uvs) < expected_count and uvs:
-                last = uvs[-1]
-                uvs = uvs + [last] * (expected_count - len(uvs))
-            else:
-                uvs = uvs[:expected_count]
+def emit_object_uv(uvs: List[Tuple[float,float]], expected_count: int, flip_v: bool=False) -> bytes:
+    # ensure 1:1 with verts
+    if len(uvs) != expected_count:
+        if len(uvs) < expected_count:
+            uvs = list(uvs) + [(0.0,0.0)]*(expected_count - len(uvs))
+        else:
+            uvs = list(uvs[:expected_count])
     out = [struct.pack("<H", len(uvs))]
-    out += [struct.pack("<ff", *uv) for uv in uvs]
+    for u,v in uvs:
+        if flip_v:
+            v = 1.0 - float(v)
+        out.append(struct.pack("<ff", float(u), float(v)))
     return b"".join(out)
 
-def emit_object(mesh: Mesh) -> bytes:
+def emit_object(mesh: 'Mesh', prefer_channel: int = 1, bake_xform: bool = False, flip_v_4140: bool = False) -> bytes:
     name = mesh.name or "Object"
     cb = ChunkBuilder(OBJECT)
     cb.add(emit_cstr(name))
 
-    # If the parsed object did NOT have a mesh, do not fabricate one.
-    if not mesh.had_mesh:
-        # This covers lights, cameras, and helper/dummy empties.
-        # We emit just the OBJECT name, with no OBJECT_MESH subchunk.
-        return cb.finalize()
+    # Resolve verts/faces/uvs with FMC split
+    verts = mesh.vertices
+    faces = mesh.faces
+    if mesh.fmc_channels.get(prefer_channel):
+        verts, uvs, faces = rebuild_with_fmc(mesh, prefer_channel)
+    else:
+        uvs = mesh.uv_primary or []
 
-    # Proper mesh emission:
-    verts, uvs, faces = expand_vertices_with_fmc(mesh)
+    # Bake transform if requested
+    if bake_xform and mesh.trans_matrix:
+        verts = apply_matrix_to_vertices(verts, mesh.trans_matrix)
 
-    mcb = ChunkBuilder(OBJECT_MESH)
-    # Canonical subchunk order: 4110 → 4140 → 4120 → 4150 → 4160
-    mcb.add_chunk(POINT_ARRAY, emit_point_array(verts))
-    mcb.add_chunk(OBJECT_UV, emit_object_uv(uvs, expected_count=len(verts)))
-    mcb.add(emit_object_faces_with_subs(faces, mesh.mat_faces))
-    if mesh.smooth_masks:
-        mcb.add_chunk(OBJECT_SMOOTH, b"".join(struct.pack("<I", m) for m in mesh.smooth_masks))
-    if mesh.trans_matrix:
-        mcb.add_chunk(OBJECT_TRANS_MATRIX, mesh.trans_matrix)
+    # Emit mesh block
+    mb = ChunkBuilder(OBJECT_MESH)
+    mb.add_chunk(POINT_ARRAY, emit_point_array(verts))
+    if uvs:
+        mb.add_chunk(OBJECT_UV, emit_object_uv(uvs, expected_count=len(verts), flip_v=flip_v_4140))
+    mb.add(emit_object_faces(faces, mesh.face_flags, mesh.smooth_masks, mesh.mat_faces))
+    if (not bake_xform) and mesh.trans_matrix:
+        mb.add_chunk(OBJECT_TRANS_MATRIX, mesh.trans_matrix)
 
-    cb.add(mcb.finalize())
+    cb.add(mb.finalize())
+
     return cb.finalize()
 
-def compose_3ds(doc: Doc) -> bytes:
+def compose_3ds(doc: 'Doc', prefer_channel: int = 1, bake_xform: bool = False, flip_v_4140: bool = False) -> bytes:
     root = ChunkBuilder(PRIMARY)
-    root.add_chunk(M3D_VERSION, struct.pack("<I", 3))  # always version 3
+    # Version 3 (matches H&D I3D examples)
+    root.add_chunk(M3D_VERSION, struct.pack("<I", 3))
 
+    # OBJECTINFO container
     edit = ChunkBuilder(OBJECTINFO)
 
-    # Materials — preserve discovery order from I3D
+    # Materials
     for mname, meta in doc.materials.items():
         edit.add(emit_material(mname, meta))
 
-    # Ensure materials referenced exist
+    # Ensure materials referenced by meshes exist (create empty if missing)
     for mesh in doc.meshes:
         for mname in mesh.mat_faces.keys():
             if mname and mname not in doc.materials:
                 doc.materials[mname] = {"filepath": None}
                 edit.add(emit_material(mname, {"filepath": None}))
 
-    # Objects — preserve discovery order; do not fabricate meshes for non-mesh objects
+    # Objects
     for mesh in doc.meshes:
-        edit.add(emit_object(mesh))
+        edit.add(emit_object(mesh, prefer_channel=prefer_channel, bake_xform=bake_xform, flip_v_4140=flip_v_4140))
 
     root.add(edit.finalize())
 
-    # Animation (KFDATA) — byte-exact keep, after EDIT chunk
+    # Append raw KFDATA blocks if any
     for blob in doc.kfdata_blobs:
         root.add(blob)
 
@@ -501,23 +459,32 @@ def compose_3ds(doc: Doc) -> bytes:
 
 # ---------- CLI ----------
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python i3d_to_3ds.py <input.i3d>")
-        sys.exit(1)
+    ap = argparse.ArgumentParser(description="I3D → 3DS converter with FMC UV splitting and 3ds Max-friendly materials.")
+    ap.add_argument("i3d_file", help="Path to input .i3d")
+    ap.add_argument("-o", "--output", help="Path to output .3ds (default: alongside input)")
+    ap.add_argument("--channel", type=int, default=1, help="FACE_MAP_CHANNEL index to use (default: 1)")
+    ap.add_argument("--bake-xform", action="store_true", help="Bake OBJECT_TRANS_MATRIX (0x4160) into vertices")
+    ap.add_argument("--flip-v-4140", action="store_true", help="Flip V in emitted 0x4140 (v = 1 - v). Default OFF.")
+    args = ap.parse_args()
 
-    in_path = Path(sys.argv[1])
+    in_path = Path(args.i3d_file)
     if not in_path.exists() or in_path.suffix.lower() != ".i3d":
         print(f"[ERR] Not a valid .i3d: {in_path}")
         sys.exit(2)
 
+    out_path = Path(args.output) if args.output else in_path.with_suffix(".3ds")
+
     print(f"[I3D] Loading: {in_path}")
     doc = parse_i3d(in_path)
-    print(f"[I3D] Meshes: {len(doc.meshes)} | Materials: {len(doc.materials)} | KFDATA: {len(doc.kfdata_blobs)}")
+    print(f"[I3D] Meshes: {len(doc.meshes)} | Materials: {len(doc.materials)} | KFDATA blobs: {len(doc.kfdata_blobs)}")
 
-    blob = compose_3ds(doc)
-    out_path = in_path.with_suffix(".3ds")
+    blob = compose_3ds(doc, prefer_channel=args.channel, bake_xform=args.bake_xform, flip_v_4140=args.flip_v_4140)
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_bytes(blob)
     print(f"[OK ] Wrote: {out_path.resolve()} ({len(blob)} bytes)")
+    if args.bake_xform:
+        print("[INFO] Transforms baked; 0x4160 omitted on meshes that had it.")
 
 if __name__ == "__main__":
     main()
