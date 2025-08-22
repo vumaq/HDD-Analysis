@@ -1,0 +1,38 @@
+/* CameraAtCBOX_PointToTarget_Parented.ms — Max 2010+
+   - Creates Camera01 as a child of cbox01
+   - Camera starts at cbox01’s transform
+   - Camera points to Camera01.Target if it exists
+*/
+
+with redraw off
+(
+    fn findByLower wanted =
+    (
+        local w = toLower wanted
+        for o in objects do if (toLower o.name) == w do return o
+        undefined
+    )
+
+    -- 1) Get cbox01
+    local cbox = findByLower "cbox01"
+    if cbox == undefined do
+    (
+        messageBox "Couldn't find 'cbox01'." title:"CameraAtCBOX"
+        return false
+    )
+
+    -- 2) Create target camera
+    local cam = targetCamera name:"Camera01"
+    cam.transform = cbox.transform   -- match initial position/rotation
+    cam.parent    = cbox             -- now it follows cbox01
+
+    -- 3) If Camera01.Target exists, aim at it
+    local tgtNode = findByLower "camera01.target"
+    if tgtNode != undefined do cam.target = tgtNode
+
+    -- 4) Switch viewport to new camera
+    viewport.setType #view_camera
+    viewport.setCamera cam
+
+    format "Camera01 created, parented to cbox01, aimed at Camera01.Target (if found).\n"
+)

@@ -1,0 +1,60 @@
+/* CameraChild_MatchAndAim.ms — Max 2010+ 
+   - Finds/creates a Target camera named "Camera01"
+   - Parents the camera under cbox01
+   - Matches the camera's WORLD transform to cbox01 (so local = identity)
+   - Moves the existing target to a sane aim point
+*/
+with redraw off
+(
+    fn findByLower wanted =
+    (
+        local w = toLower wanted
+        for o in objects do if (toLower o.name) == w do return o
+        undefined
+    )
+
+    /* 1) Get cbox01 (aim/parent reference) */
+    local cbox = findByLower "cbox01"
+    if cbox == undefined do
+    (
+        messageBox "Couldn't find 'cbox01'." title:"CameraChild_MatchAndAim"
+        return false
+    )
+    local cboxTM = try cbox.transform catch undefined
+    if cboxTM == undefined do
+    (
+        messageBox "'cbox01' has no valid transform." title:"CameraChild_MatchAndAim"
+        return false
+    )
+
+    /* 2) Get or make the Target camera named Camera01 */
+    local cam = undefined
+    for o in objects where (superClassOf o == camera and isKindOf o Targetcamera) do
+        if (toLower o.name) == "camera01" do (cam = o; exit)
+    if cam == undefined do cam = targetCamera name:"Camera01"
+
+    /* 3) Parent camera under cbox01, then force world = cbox world (local becomes identity) */
+    cam.parent     = cbox
+    cam.transform  = cboxTM
+
+    /* 4) Resolve target node and place it */
+    local tgtNode = try cam.target catch undefined
+    if tgtNode != undefined do
+    (
+        /* Option A (default): aim 100 units forward from camera along its local -Z */
+        local camPos = cam.transform.row4
+        local fwd    = -cam.transform.row3
+        if (length fwd) < 1e-6 do fwd = [0,0,-1]
+        local tgtPos = camPos + (normalize fwd) * 100.0
+        tgtNode.transform = transMatrix tgtPos
+
+        /* Option B: snap target to cbox01's world position (uncomment to use) */
+        -- tgtNode.transform = transMatrix cboxTM.row4
+    )
+
+    /* 5) Look through it */
+    viewport.setType #view_camera
+    viewport.setCamera cam
+
+    format "Camera '%' parented to '%'; target aligned.\n" cam.name cbox.name
+)
