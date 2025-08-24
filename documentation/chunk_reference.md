@@ -283,56 +283,38 @@ detailed description explaining its role, structure, and context in I3D files.
 
 ---
 
-## Vendor / Unknown
-
-- **0x0008 -- VENDOR_CONTAINER**  
-  A vendor-specific container. Typically used by exporters to store proprietary data.
-
-- **0x2426 -- VENDOR_2426**  
-  Vendor-specific chunk. Purpose unknown, not part of standard 3DS/I3D specs.
-
-- **0x948D -- VENDOR_948D**  
-  Vendor-specific chunk. Purpose unknown, not part of standard 3DS/I3D specs.
-
-- **0x9F59 -- VENDOR_9F59**  
-  Vendor-specific chunk. Purpose unknown, not part of standard 3DS/I3D specs.
-
-- **0xFFFF -- VENDOR_CONTAINER_END**  
-  Marks the end of a vendor container.
-
-
-------------------------------------------------------------------------
-
 ## Vendor / Non-Standard Extensions
 
 These IDs have been observed in I3D files but are not documented in the
 classic 3DS specification.
+
+- **0x0008 -- VENDOR_CONTAINER**  
+  
+- **0x2426 -- VENDOR_2426**  
+
+- **0x948D -- VENDOR_948D**  
+
+- **0x9F59 -- VENDOR_9F59**  
+
+- **0xFFFF --  VENDOR_FFFF*
 
 - **0x4200 -- FACE_MAP_CHANNEL**  
 Illusion Softworks extension to support multiple UV mapping channels.  
 Each channel stores per-face mapping coordinates.
 
 - **0x2426 -- VENDOR_2426**  
-Non-standard / vendor-specific. Purpose unknown.
 
 - **0x948D -- VENDOR_948D**  
-Non-standard / vendor-specific. Purpose unknown.
 
 - **0x9F59 -- VENDOR_9F59**  
-Non-standard / vendor-specific. Purpose unknown.
 
 - **0xB023 -- VENDOR_B023**  
-Appears in some I3D files, not in standard 3DS docs.
 
 - **0xB024 -- VENDOR_B024**  
-Appears in some I3D files, not in standard 3DS docs.
 
 - **0xB025 -- VENDOR_B025**  
-Appears in some I3D files, not in standard 3DS docs.
 
 - **0xB027 -- VENDOR_B027**  
-Appears in some I3D files, not in standard 3DS docs.
 
 - **0xB028 -- VENDOR_B028**  
-Appears in some I3D files, not in standard 3DS docs.
 
