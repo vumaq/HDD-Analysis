@@ -296,7 +296,7 @@ classic 3DS specification.
 
 - **0x9F59 -- VENDOR_9F59**  
 
-- **0xFFFF --  VENDOR_FFFF*
+- **0xFFFF --  VENDOR_FFFF**
 
 - **0x4200 -- FACE_MAP_CHANNEL**  
 Illusion Softworks extension to support multiple UV mapping channels.  
@@ -317,4 +317,5 @@ Each channel stores per-face mapping coordinates.
 - **0xB027 -- VENDOR_B027**  
 
 - **0xB028 -- VENDOR_B028**  
+
 
