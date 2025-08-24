@@ -152,9 +152,6 @@ How it works:
 - The game engine loads the real model "domek.i3d" from models.dta at runtime.
 - Keep the file name "scene.i3d" — the loader expects that.
 
-If the model doesn't appear:
-- Ensure "domek.i3d" exists in models.dta (or your loose models folder if supported).
-- Some builds use slightly different .scr keys. If needed, copy an [OBJECT] block from a stock mission's .scr and replace ours.
 """
 
 def main():
