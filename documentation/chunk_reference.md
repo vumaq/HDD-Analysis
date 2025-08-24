@@ -306,8 +306,7 @@ detailed description explaining its role, structure, and context in I3D files.
 ## Vendor / Non-Standard Extensions
 
 These IDs have been observed in I3D files but are not documented in the
-classic 3DS specification. They appear in Illusion Softworks codebases
-(`C_chunk.h`, `I3Dimp.cpp`) or through reverse engineering.
+classic 3DS specification.
 
 - **0x4200 -- FACE_MAP_CHANNEL**  
 Illusion Softworks extension to support multiple UV mapping channels.  
@@ -336,3 +335,4 @@ Appears in some I3D files, not in standard 3DS docs.
 
 - **0xB028 -- VENDOR_B028**  
 Appears in some I3D files, not in standard 3DS docs.
+
